@@ -1,0 +1,178 @@
+# Copyright (C) 2021 Jorge Navarro-Ortiz (jorgenavarro@ugr.es), 
+# University of Granada
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import struct
+
+from ryu.lib import addrconv
+from ryu.lib import stringify
+from ryu.lib.packet import packet_base
+from ryu.lib.packet import packet_utils
+
+TCP_SERVER_PORT = 1883
+
+# PACKET CONTROL TYPE
+MQTT_PACKET_CONTROL_TYPE_CONNECT=1
+MQTT_PACKET_CONTROL_TYPE_CONNACK=2
+MQTT_PACKET_CONTROL_TYPE_PUBLISH=3
+MQTT_PACKET_CONTROL_TYPE_PUBACK=4
+MQTT_PACKET_CONTROL_TYPE_PUBREC=5
+MQTT_PACKET_CONTROL_TYPE_PUBREL=6
+MQTT_PACKET_CONTROL_TYPE_PUBCOMP=7
+MQTT_PACKET_CONTROL_TYPE_SUBSCRIBE=8
+MQTT_PACKET_CONTROL_TYPE_SUBACK=9
+MQTT_PACKET_CONTROL_TYPE_UNSUBSCRIBE=10
+MQTT_PACKET_CONTROL_TYPE_UNSUBACK=11
+MQTT_PACKET_CONTROL_TYPE_PINGREQ=12
+MQTT_PACKET_CONTROL_TYPE_PINGRESP=13
+MQTT_PACKET_CONTROL_TYPE_DISCONNECT=14
+
+class mqtt(packet_base.PacketBase):
+    """MQTT Version 3.1.1 (http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.pdf) header encoder/decoder class.
+
+       An MQTT Control Packet consists of up to three parts, always in the following order: 
+           + Fixed header (present in all MQTT Control Packets)
+           + Variable header (present in some MQTT Control Packets)
+           + Payload (present in some MQTT Control Packets)
+
+       Fixed header:
+           + Byte 1: MQTT Control Packet type (most significant 4 bits), flags (less significant 4 bits)
+              MQTT Control Packet type - Flags (bits 3, 2, 1, 0)
+               0 ..... Reserved
+               1 ..... CONNECT         - 0   0   0   0
+               2 ..... CONNACK         - 0   0   0   0
+               3 ..... PUBLISH         - DUP QoS QoS RETAIN
+               4 ..... PUBACK          - 0   0   0   0
+               5 ..... PUBREC          - 0   0   0   0
+               6 ..... PUBREL          - 0   0   1   0
+               7 ..... PUBCOMP         - 0   0   0   0
+               8 ..... SUBSCRIBE       - 0   0   1   0
+               9 ..... SUBACK          - 0   0   0   0
+              10 ..... UNSUBSCRIBE     - 0   0   1   0
+              11 ..... UNSUBACK        - 0   0   0   0
+              12 ..... PINGREQ         - 0   0   0   0
+              13 ..... PINGRESP        - 0   0   0   0
+              14 ..... DISCONNECT      - 0   0   0   0
+              15 ..... Reserved
+
+              DUP    = Duplicate delivery of a PUBLISH Control Packet
+              QoS    = PUBLISH Quality of Service
+              RETAIN = PUBLISH Retain flag
+
+           + Byte 2...: Remaining Length
+              Number of bytes remaining within the current packet, including data in the variable header and the payload. RL does not include the bytes used to encode the RL. Values lower than 127 are encoded in one byte. Larger values use the most significant bit to indicate that there are following bytes in the representation. The least significant bits encode the data. The first byte is the least significant, and the last byte is the most significant.
+
+       Variable header:
+           + Byte 1: Packet Identifier MSB
+           + Byte 2: Packet Identifier LSB
+
+           SUBSCRIBE, UNSUBSCRIBE, and PUBLISH (if QoS > 0) Control Packets MUST contain a non-zero 16-bit Packet Identifier. Each time a client sends a new packet of one of these types it MUST assign it a currently unused Packet Identifier.
+           (...) 
+           A PUBLISH Packet MUST NOT contain a Packet Identifier if its QoS value is set to 0. 
+           A PUBACK, PUBREC or PUBREL Packet MUST contain the same Packet Identifier as the PUBLISH Packet that was originally sent. Similarly SUBACK and UNSUBACK MUST contain the Packet Identifier that was used in the corresponding SUBSCRIBE and UNSUBSCRIBE Packet respectively.
+
+       Payload:
+           Some MQTT Control Packets contain a payload as the final part of the packet. In the case of the PUBLISH packet this is the Application Message. Control Packets that require payload: CONNECT, PUBLISH (optional), SUBSCRIBE, SUBACK, and UNSUBSCRIBE.
+    """
+
+    mqttPacketControlTypeStr = {
+        0: "Reserved",
+        1: "CONNECT",
+        2: "CONNACK",
+        3: "PUBLISH",
+        4: "PUBACK",
+        5: "PUBREC",
+        6: "PUBREL",
+        7: "PUBCOMP",
+        8: "SUBSCRIBE",
+        9: "SUBACK",
+        10: "UNSUBSCRIBE",
+        11: "UNSUBACK",
+        12: "PINGREQ",
+        13: "PINGRESP",
+        14: "DISCONNECT",
+        15: "Reserved",
+    }
+
+    def __init__(self, mqttControlPacketType=1, mqttRemainingLength=0):
+        super(mqtt, self).__init__()
+        self.mqttControlPacketType = mqttControlPacketType
+        self.mqttRemainingLength = mqttRemainingLength
+
+    @classmethod
+    def parser(cls, buf):
+        # MQTT Control Packet Type (first 4 bits on the first byte of the MQTT header) and MQTT flags (last 4 bits on the first byte of the MQTT header)
+        (mqttControlPacketType, ) = struct.unpack_from('!B', buf[0])
+        mqttControlPacketType = mqttFirstByte >> 4
+        mqttFlags = mqttFirstByte & 15
+        mqttFlagDUP = (mqttFlags & 8) >> 2
+        mqttFlagQoS = (mqttFlags & 7) >> 1
+        mqttFlagRET = (mqttFlags & 1)
+        self.logger.debug("      MQTT Control Packet Type: %s", mqttPacketControlTypeStr[mqttControlPacketType])
+        self.logger.debug("      MQTT Flags:               %d (DUP=%d, QoS=%d, RET=%d)", mqttFlags, mqttFlagDUP, mqttFlagQoS, mqttFlagRET)
+
+        # MQTT Remaining Length (reverse order, first bit of each byte is a flag, a "continuation" bit that indicates whether next byte is used for this field
+        mqttRLByte1 = 0
+        mqttRLByte2 = 0
+        mqttRLByte3 = 0
+        mqttRLByte4 = 0
+        mqttRLBytes = 1             # Initially we guess the MQTT Remaining Length field has one byte
+
+        (mqttRLByte1, ) = struct.unpack_from('!B', payload[1])
+        continuationBit = (mqttRLByte1 & 128) >> 7
+        if continuationBit == 1:
+            (mqttRLByte2, ) = struct.unpack_from('!B', payload[2])
+            continuationBit = (mqttRLByte2 & 128) >> 7
+            mqttRLBytes = 2         # At least 2 bytes...
+            if continuationBit == 1:
+                (mqttRLByte3, ) = struct.unpack_from('!B', payload[3])
+                continuationBit = (mqttRLByte3 & 128) >> 7
+                mqttRLBytes = 3     # At least 3 bytes...
+                if continuationBit == 1:
+                    (mqttRLByte4, ) = struct.unpack_from('!B', payload[4])
+                    continuationBit = (mqttRLByte4 & 128) >> 7
+                    mqttRLBytes = 4 # At least 4 bytes...
+
+        # NOTE: 128^2 in the next command would be treated as the XOR operand, since these are bitwise operations
+        mqttRemainingLength = (mqttRLByte1 & 127) + (mqttRLByte2 & 127)*128 + (mqttRLByte3 & 127)*128*128 + (mqttRLByte4 & 127)*128*128*128
+        self.logger.debug("      MQTT Remaining Length:    %d", mqttRemainingLength)
+        self.logger.debug("      MQTT RL bytes:            %d, %d, %d, %d", mqttRLByte1, mqttRLByte2, mqttRLByte3, mqttRLByte4)
+
+        msg = cls(mqttControlPacketType, mqttRemainingLength)
+        payload = "" # *** TO BE DONE ***
+
+        #return msg, ipv4.get_packet_type(proto), payload
+        return msg
+
+    def serialize(self, payload):
+        length = len(self)
+        hdr = bytearray(length)
+#        version = self.version << 4 | self.header_length
+#        flags = self.flags << 13 | self.offset
+#        if self.total_length == 0:
+#            self.total_length = self.header_length * 4 + len(payload)
+#        struct.pack_into(ipv4._PACK_STR, hdr, 0, version, self.tos,
+#                         self.total_length, self.identification, flags,
+#                         self.ttl, self.proto, 0,
+#                         addrconv.ipv4.text_to_bin(self.src),
+#                         addrconv.ipv4.text_to_bin(self.dst))
+#
+#        if self.option:
+#            assert (length - ipv4._MIN_LEN) >= len(self.option)
+#            hdr[ipv4._MIN_LEN:ipv4._MIN_LEN + len(self.option)] = self.option
+#
+#        self.csum = packet_utils.checksum(hdr)
+#        struct.pack_into('!H', hdr, 10, self.csum)
+        return hdr

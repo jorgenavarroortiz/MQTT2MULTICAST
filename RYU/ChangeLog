@@ -1,0 +1,36 @@
+CHANGES
+=======
+
+* Update README.rst
+* First complete version
+* Update README.rst
+* Update README.rst
+* Delete mqttbroker\_v09.py
+* Delete mqtt\_v2.py
+* Delete mqtt\_13.py.BACKUP
+* Delete mqtt\_13.py
+* Delete mqttbroker\_v08.py
+* MQTT support (first working version, including forwarding of PUBLISH messages)
+* MQTT support (first working version, including forwarding of PUBLISH messages)
+* MQTT support (TCP timestamp updated)
+* Update README.rst
+* MQTT support (TCP ACK updated)
+* MQTT support (send TCP ACK after PUBLISH)
+* MQTT support (send TCP ACK after PUBLISH)
+* Update README.rst
+* MQTT support (added subscribers' lists)
+* MQTT support
+* MQTT support
+* Update README.rst
+* MQTT support
+* Update README.rst
+* Update README.rst
+* Update README.rst
+* Update README.rst
+* initial commit
+* Update README.rst
+* Update README.rst
+* Update README.rst
+* Update README.rst
+* RYU
+* Initial commit

@@ -1,0 +1,83 @@
+#!/usr/bin/python
+
+from mininet.net import Mininet
+from mininet.cli import CLI
+from mininet.node import Controller, OVSKernelSwitch, RemoteController, OVSSwitch
+from mininet.log import setLogLevel, info, error
+from mininet.link import Intf, TCLink
+from mininet.util import quietRun
+
+from mininet.nodelib import NAT
+from mininet.topolib import TreeNet
+
+import re
+import sys
+
+halfrtt = '0ms'
+
+def checkIntf( intf ):
+    "Make sure intf exists and is not configured."
+    if ( ' %s:' % intf ) not in quietRun( 'ip link show' ):
+        error( 'Error:', intf, 'does not exist!\n' )
+        exit( 1 )
+    ips = re.findall( r'\d+\.\d+\.\d+\.\d+', quietRun( 'ifconfig ' + intf ) )
+    if ips:
+        error( 'Error:', intf, 'has an IP address,' 'and is probably in use!\n' )
+        exit( 1 )
+
+def myNetwork():
+	net = Mininet(controller=RemoteController,switch=OVSKernelSwitch, listenPort=6634)
+
+	info( '*** Add controller\n' )
+	c0 = net.addController(name='c0',controller=RemoteController,protocols='OpenFlow13',ip='127.0.0.1',port=6633)
+
+	info( '*** Add hosts\n' )
+	num_hosts=4
+	hosts = []
+	for i in xrange(num_hosts):
+		hostname = 'h%d' % (i+1)
+		host = net.addHost(hostname, mac='00:00:00:00:00:%d' % (i+1), ip='192.168.1.%d' % (100+i+1))
+		hosts.append(host)
+
+	info( '*** Add switches\n' )
+	num_switches = 3
+	switches = []
+	for i in xrange(num_switches):
+		switch = net.addSwitch('s%d' % (i+1), cls=OVSSwitch, protocols='OpenFlow13')
+		switches.append(switch)
+
+	# "Real" network interface connected to switch (the host on the other side shall have an IP address of the range used by hosts)
+#	info( '*** Add enp0s8 to h1\n' )
+#	intfName='enp0s8'
+#	info( '*** Checking', intfName, '\n' )
+#	checkIntf( intfName )                               # Not required, just for checking if the real network interface is in use...
+#	Intf( intfName, node=net.get('s1') )
+
+	info( '*** Add links\n')
+	net.addLink( net.get('s1'), net.get('s2') )
+	net.addLink( net.get('s1'), net.get('s3') )
+	net.addLink( net.get('s2'), net.get('h1'), cls=TCLink, delay=halfrtt )
+	net.addLink( net.get('s2'), net.get('h2') )
+	net.addLink( net.get('s3'), net.get('h3') )
+	net.addLink( net.get('s3'), net.get('h4') )
+
+	info( '*** Starting network\n')
+	net.build()
+	net.start()
+
+	info( '*** Starting controllers\n')
+	for controller in net.controllers:
+		controller.start()
+	net.get('s1').start([c0])
+
+#	net.get('h1').cmd("XXX")    # Example on how to execute a command on a particular host
+#	net.get('h1').waitOutput()
+
+	# Open Mininet Command Line Interface
+	CLI(net)
+
+	# Teardown and cleanup
+	net.stop()
+if __name__ == '__main__':
+	setLogLevel( 'info' )
+	myNetwork()
