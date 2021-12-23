@@ -225,12 +225,12 @@ class SimpleSwitch13(app_manager.RyuApp):
 
             elif flags == 2:
                 # The sender unsubscribes to this multicast IP address
-                self.logger.info("### %s > MQTT2MULTICAST - unsubscribe %s from the multicast IP address %s", now, pkt_ipv4.src, multicastIPAddress)
+                self.logger.info("### %s > MQTT2MULTICAST - unsubscribe %s from the multicast IP address %s (topic: %s)", now, pkt_ipv4.src, multicastIPAddress, topic.decode())
                 #for topic in self.multicastReceiverForTopic.copy():
                 multicastReceiverList = self.multicastReceiverForTopic[topic.decode()]
                 multicastReceiverList = [x for x in multicastReceiverList if not(x == pkt_ipv4.src)] # Removing based on the content of the first element. 
-                                                                                                         # Maybe list comprehension is not the best for performance, but it works...
-                self.multicastReceiverForTopic[topic.decode()] = multicastReceiverList                        # Required since subscribersList is now a different object
+                                                                                                     # Maybe list comprehension is not the best for performance, but it works...
+                self.multicastReceiverForTopic[topic.decode()] = multicastReceiverList               # Required since subscribersList is now a different object
                 # If this key has no content, remove it from the dictionary
                 if not self.multicastReceiverForTopic[topic.decode()]:
                     del self.multicastReceiverForTopic[topic.decode()]
@@ -300,8 +300,8 @@ class SimpleSwitch13(app_manager.RyuApp):
         auxSecondByte = auxSecondByte % 256
         auxThirdByte = auxThirdByte % 256
 
-        # *** We should check if we have too many topics converted to multicast IP addresses ***
-        # If we employ 225.0.0.0-231.0.0.1 (reserved according to https://www.iana.org/assignments/multicast-addresses/multicast-addresses.xhtml), this gives as more than 117 million of topics!
+        # TO BE DONE: We should check if we have too many topics converted to multicast IP addresses.
+        # Anyway, if we employ 225.0.0.0-231.0.0.1 (reserved according to https://www.iana.org/assignments/multicast-addresses/multicast-addresses.xhtml), this gives as more than 117 million of topics!
         multicastIPAddress = str(auxForthByte) + '.' + str(auxThirdByte) + '.' + str(auxSecondByte) + '.' + str(auxFirstByte)
 
         return multicastIPAddress

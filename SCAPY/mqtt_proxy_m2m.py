@@ -15,6 +15,7 @@ import sys, getopt
 import pdb
 
 import binascii
+import time
 
 # Dictionary of subscribers: each entry has the topic as key and a list of lists ({IP address, TCP port, QoS}) of the subscribers for that topic
 subscribersForTopic = {}
@@ -30,6 +31,7 @@ forwardersForTopic_lock = Lock() # To avoid concurrent access
 
 # Dictionary of topic to multicast IP address, and transactionID to topic
 topicToMulticast = {}
+topicToMulticastBackup = {} # Backup not deleted when there are no subscribers for this topic. Intended for publishers, so the MQTT proxy can multicast their messages.
 transactionIDToTopic = {}
 
 # TCP flags
@@ -98,7 +100,7 @@ class MQTTProxy:
                           send(ipF/udpF/mqttF, verbose=False)
 
 
-      print("[%s] %s (TCP port %d) disconnected. TOPICS-SUBSCRIBERS list:         %s" % (threading.currentThread().getName(), srcIPAddress, tcpPort, subscribersForTopic))
+      print("[%s] %s (TCP port %d) disconnected. TOPICS-SUBSCRIBERS list: %s" % (threading.currentThread().getName(), srcIPAddress, tcpPort, subscribersForTopic))
 
       # *** FOR TESTING *** MQTT DISCONNECT should only be sent if there is no other subscriber subscribed to this topic in this proxy ***
 
@@ -169,7 +171,7 @@ class MQTTProxy:
           else:
               print("Broadcasting MQTT PUBLISH - no one subscribed to topic %s" % (topic))
 
-   def _checkIfTopicIsNewMQTT2MULTICAST(self, dstIPAddress, topic):
+   def _checkIfTopicIsNewMQTT2MULTICAST(self, dstIPAddress, topic, flags):
       # If it is a new topic, send a MQTT2MULTICAST REQUEST message to the MQTT2MULTICAST server (SDN controller)
       if topic.decode() in topicToMulticast:
           # Existing topic
@@ -184,7 +186,7 @@ class MQTTProxy:
           packetType=1
           transactionID=random.getrandbits(32)
           topicLength = len(topic)
-          flags = 1
+          #flags = 1
           M2MContent = bytearray(struct.pack('!BIBH', packetType, transactionID, flags, topicLength))
           #M2MContent.extend(bytearray(topic.encode()))
           M2MContent.extend(topic)
@@ -204,11 +206,11 @@ class MQTTProxy:
           topicLength = len(topic)
           flags = 2
           M2MContent = bytearray(struct.pack('!BIBH', packetType, transactionID, flags, topicLength))
-          print("***** Topic: %s" % (topic))
+          #print("### Topic: %s" % (topic))
           M2MContent.extend(bytearray(topic.encode()))
           #M2MContent.extend(topic)
 
-          print("[%s] MQTT2MULTICAST REQUEST sent, topic=%s, transactionID=%d, flags=%d" % (threading.currentThread().getName(), topic, transactionID, flags))
+          print("[%s] MQTT2MULTICAST REQUEST sent (unsubscribe), topic=%s, transactionID=%d, flags=%d" % (threading.currentThread().getName(), topic, transactionID, flags))
           transactionIDToTopic[transactionID] = topic
 
           send(ipM2M/udpM2M/Raw(load=M2MContent), verbose=False)
@@ -277,10 +279,41 @@ class MQTTProxy:
 
                 # If an MQTT2MULTICAST server is configured
                 if self.mqtt2multicast_ip_addr_server:
-                    self._checkIfTopicIsNewMQTT2MULTICAST(p[IP].dst, topic)
+                    if not topic.decode() in topicToMulticastBackup:
+                        self._checkIfTopicIsNewMQTT2MULTICAST(p[IP].dst, topic, 0)
 
                 # Broadcast MQTT PUBLISH to subscribers connected to this proxy
                 self._broadcastMessageForTopic(p, topic.decode('utf-8'), message.decode('utf-8'))
+
+                # *** Send to multicast address ***
+                if self.mqtt2multicast_ip_addr_server:
+                    print("[%s] topicToMulticastBackup: %s, topic=%s" % (threadName, topicToMulticastBackup, topic.decode()))
+
+                    if topic.decode() in topicToMulticastBackup:
+                        # Existing topic
+                        multicastIPAddress = topicToMulticastBackup[topic.decode()]
+                        print("[%s] Multicasting the received MQTT PUBLISH message, multicast IP address=%s, topic=%s, message=%s" % (threadName, multicastIPAddress, topic.decode(), message.decode()))
+                    else:
+                        print("[%s] ERROR!!!! Trying to multicast the received MQTT PUBLISH message, but no nulticast IP address was found for topic=%s. Wait 10s for a MQTT2MULTICAST REPLY message." % (threadName, topic.decode()))
+                        waiting = True
+                        i=0
+                        while waiting:
+                            time.sleep(1.0)
+                            i = i + 1
+                            print("[%s] Wait %d seconds" % (threadName, i))
+
+                            if topic.decode() in topicToMulticastBackup:
+                                waiting = False
+                                multicastIPAddress = topicToMulticastBackup[topic.decode()]
+                                print("[%s] Multicasting the received MQTT PUBLISH message, multicast IP address=%s, topic=%s, message=%s" % (threadName, multicastIPAddress, topic.decode(), message.decode()))
+                            elif i >= 10:
+                                waiting = False
+                                print("[%s] No MQTT2MULTICAST REPLY message received, discarding MQTT PUBLISH message (topic=%s, message=%s)" % (threadName, multicastIPAddress, topic.decode(), message.decode()))
+
+                        # If there is no subscriber, the topic is removed from topicToMulticast
+                        if not topic.decode() in subscribersForTopic:
+                            if topic.decode() in topicToMulticast:
+                                del topicToMulticast[topic.decode()]
 
                 # Forward MQTT PUBLISH to forwarder using UDP
                 if self.forwarders:
@@ -303,7 +336,7 @@ class MQTTProxy:
 
                 # If an MQTT2MULTICAST server is configured
                 if self.mqtt2multicast_ip_addr_server:
-                    self._checkIfTopicIsNewMQTT2MULTICAST(p[IP].dst, topic)
+                    self._checkIfTopicIsNewMQTT2MULTICAST(p[IP].dst, topic, 1)
 
                 # Add subscriber to the list of topics (list of lists)
                 with subscribersForTopic_lock:
@@ -457,9 +490,10 @@ class MQTTProxy:
              elif p[MQTT].type == 11:
                  # UNSUBSCRIBE
                  # Remove this forwarder from the dictionary of topics
-                 print("[FORWARDER] MQTT UNSUBSCRIBE received, topic=%s" % (topic))
-                 pdb.set_trace()
-                 topic = p[MQTT][2].topic
+#                 pdb.set_trace()
+                 #topic = p[MQTT][2].topic
+                 topic = p[MQTT][2].load[:p[MQTT][2].len]
+                 print("[FORWARDER] MQTT UNSUBSCRIBE received") #, topic=%s" % (topic))
                  forwarderIPAddress = p[IP].src
                  with forwardersForTopic_lock:
                      for topic in forwardersForTopic.copy():
@@ -489,7 +523,7 @@ class MQTTProxy:
       # Infinite loop to handle MQTT2MULTICAST messages from the MQTT2MULTICAST server
       # Wait for a new UDP (MQTT2MULTICAST) packet from the corresponding port
       interfacesList = get_if_list()#[1:]
-      print("[%s] MQTT2MULTICAST listener - interfaces to sniff: %s (all interfaces: %s)" % (threading.currentThread().getName(), interfacesList, get_if_list()))
+      print("[%s] MQTT2MULTICAST listeners - interfaces to sniff: %s (all interfaces: %s)" % (threading.currentThread().getName(), interfacesList, get_if_list()))
 
       while True:
          p = sniff(count=1, iface=interfacesList, filter='inbound and udp and port ' + str(self.mqtt2multicast_udp_port_client))[0] 
@@ -512,8 +546,9 @@ class MQTTProxy:
              (mqtt2multicastIPAddress, ) = struct.unpack_from('!I', tmpBuffer)
              mqtt2multicastIPAddressStr = socket.inet_ntoa(mqtt2multicastIPAddress.to_bytes(4, 'big'))
              topic = transactionIDToTopic[mqtt2multicastTransactionID]
-             print("[%s] MQTT2MULTICAST listener - received MQTT2MULTICAST IP Address (transaction ID: %d, topic:%s, flags=%d): %s" % (threading.currentThread().getName(), mqtt2multicastTransactionID, topic, int(mqtt2multicastFlags), mqtt2multicastIPAddressStr))
+             print("[%s] MQTT2MULTICAST listener - received MQTT2MULTICAST IP Address (transaction ID: %d, topic:%s, flags=%d): %s" % (threading.currentThread().getName(), mqtt2multicastTransactionID, topic.decode(), int(mqtt2multicastFlags), mqtt2multicastIPAddressStr))
              topicToMulticast[topic.decode()] = mqtt2multicastIPAddressStr
+             topicToMulticastBackup[topic.decode()] = mqtt2multicastIPAddressStr
 
    def _start_mqtt2MulticastThread(self):
       print ("Starting thread mqtt2MulticastThread to receive MQTT2MULTICAST REPLY messages...")
