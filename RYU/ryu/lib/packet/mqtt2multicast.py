@@ -48,15 +48,17 @@ class mqtt2multicast(packet_base.PacketBase):
 
                If packet type == 1:
                        Transaction ID: 4 bytes
+                       Flags: 1 byte (0 means nothing, 1 means subscribe the sender to this multicast address, 2 means unsubscribe the sender to this multicast address; so it can substitute IGMP for SDN-based multicast)
                        Topic size: 2 bytes
                        Topic: variable length field
 
                If packet type == 2:
                        Transaction ID: 4 bytes
+                       Flags: 1 byte (currently 0)
                        Multicast IP address
     """
 
-    _MQTT2MULTICAST_PACK_STR='!BI'
+    _MQTT2MULTICAST_PACK_STR='!BIB'
     _MIN_LEN = struct.calcsize(_MQTT2MULTICAST_PACK_STR)
 
     mqtt2multicastPacketTypeStr = {
@@ -64,13 +66,14 @@ class mqtt2multicast(packet_base.PacketBase):
         2: "REPLY",
     }
 
-    def __init__(self, mqtt2multicastPacketType, mqtt2multicastTransactionID, mqtt2multicastTopicSize=None, mqtt2multicastTopic=None, mqtt2multicastIPAddress=None):
-        LOG.debug("######### MQTT2MULTICAST INIT (mqtt2multicastPacketType=%d, mqtt2multicastTransactionID=%d) #########", mqtt2multicastPacketType, mqtt2multicastTransactionID)
+    def __init__(self, mqtt2multicastPacketType, mqtt2multicastTransactionID, mqtt2multicastFlags, mqtt2multicastTopicSize=None, mqtt2multicastTopic=None, mqtt2multicastIPAddress=None):
+        LOG.debug("######### MQTT2MULTICAST INIT (mqtt2multicastPacketType=%d, mqtt2multicastTransactionID=%d, mqtt2multicastFlags=%d) #########", mqtt2multicastPacketType, mqtt2multicastTransactionID, mqtt2multicastFlags)
         super(mqtt2multicast, self).__init__()
 
-        # Required for all packet types: mqtt2multicastPacketType and mqtt2multicastTransactionID
+        # Required for all packet types: mqtt2multicastPacketType, mqtt2multicastTransactionID and mqtt2multicastFlags
         self.mqtt2multicastPacketType = mqtt2multicastPacketType
         self.mqtt2multicastTransactionID = mqtt2multicastTransactionID
+        self.mqtt2multicastFlags = mqtt2multicastFlags
 
         # Required for other messages
         self.mqtt2multicastTopicSize = mqtt2multicastTopicSize
@@ -85,14 +88,16 @@ class mqtt2multicast(packet_base.PacketBase):
         # Not all the fields are present in all the messages, so they are initialized to None
         cls.mqtt2multicastPacketType = None
         cls.mqtt2multicastTransactionID = None
+        cls.mqtt2multicastFlags = None
         cls.mqtt2multicastTopicSize = None
         cls.mqtt2multicastTopic = None
         cls.mqtt2multicastIPAddress = None
 
         # MQTT Control Packet Type (first 4 bits on the first byte of the MQTT header) and MQTT flags (last 4 bits on the first byte of the MQTT header)
-        (cls.mqtt2multicastPacketType, cls.mqtt2multicastTransactionID) = struct.unpack_from(cls._MQTT2MULTICAST_PACK_STR, tmpBuffer)
+        (cls.mqtt2multicastPacketType, cls.mqtt2multicastTransactionID, cls.mqtt2multicastFlags) = struct.unpack_from(cls._MQTT2MULTICAST_PACK_STR, tmpBuffer)
         LOG.debug("      MQTT2MULTICAST Packet Type:    %s (%d)", cls.mqtt2multicastPacketTypeStr[cls.mqtt2multicastPacketType], cls.mqtt2multicastPacketType)
         LOG.debug("      MQTT2MULTICAST Transaction ID: %d", cls.mqtt2multicastTransactionID)
+        LOG.debug("      MQTT2MULTICAST Flags:          %d", cls.mqtt2multicastFlags)
 
         tmpBuffer=tmpBuffer[cls._MIN_LEN:]
 
@@ -110,7 +115,7 @@ class mqtt2multicast(packet_base.PacketBase):
             (cls.mqtt2multicastIPAddress, ) = struct.unpack_from('!I', tmpBuffer)
             LOG.debug("      MQTT2MULTICAST IP Address: %d", addrconv.ipv4.bin_to_text(cls.mqtt2multicastIPAddress))
 
-        # *** INCLUDE HERE FUTURE MQTT2MULTICAST MESSAGES TO BE DECODED ***
+        # INCLUDE HERE FUTURE MQTT2MULTICAST MESSAGES TO BE DECODED
 
 
         # From packet_base.py. The parser(cls, buf) function is used when decoding a packet. It shall return:
@@ -118,7 +123,7 @@ class mqtt2multicast(packet_base.PacketBase):
         # * A packet_base.PacketBase subclass appropriate for the rest of the packet. None when the rest of the packet should be considered as raw payload.
         # * The rest of packet.
         # JNa: This (cls(...)) calls the __init__ function, which stores values in the object variables (and therefore we should not store them in this function)
-        return (cls(cls.mqtt2multicastPacketType, cls.mqtt2multicastTransactionID, cls.mqtt2multicastTopicSize, cls.mqtt2multicastTopic, cls.mqtt2multicastIPAddress), None, None)
+        return (cls(cls.mqtt2multicastPacketType, cls.mqtt2multicastTransactionID, cls.mqtt2multicastFlags, cls.mqtt2multicastTopicSize, cls.mqtt2multicastTopic, cls.mqtt2multicastIPAddress), None, None)
 
 
     def serialize(self, _payload, _prev):
@@ -127,7 +132,7 @@ class mqtt2multicast(packet_base.PacketBase):
         # From packet_base.py. The serialize(self, payload, prev) function is used when encoding a packet.
         # Returns a bytearray which contains the header (and the payload if it is an application layer protocol, which is the case of MQTT2MULTICAST).
 
-        fixedHeader = bytearray(struct.pack('!BI', self.mqtt2multicastPacketType, self.mqtt2multicastTransactionID))
+        fixedHeader = bytearray(struct.pack(self._MQTT2MULTICAST_PACK_STR, self.mqtt2multicastPacketType, self.mqtt2multicastTransactionID, self.mqtt2multicastFlags))
         if self.mqtt2multicastPacketType == 1:
             # REQUEST
             variableHeader = bytearray(struct.pack('!H', self.mqtt2multicastTopicSize))
@@ -138,7 +143,7 @@ class mqtt2multicast(packet_base.PacketBase):
             #variableHeader = bytearray(struct.pack('!I', self.mqtt2multicastIPAddress))
             variableHeader = bytearray(self.mqtt2multicastIPAddress)
 
-        # *** INCLUDE HERE FUTURE MQTT2MULTICAST MESSAGES TO BE ENCODED ***
+        # INCLUDE HERE FUTURE MQTT2MULTICAST MESSAGES TO BE ENCODED
 
 
         return six.binary_type(fixedHeader + variableHeader)

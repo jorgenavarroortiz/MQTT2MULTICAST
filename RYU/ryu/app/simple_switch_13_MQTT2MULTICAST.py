@@ -12,6 +12,9 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Jorge Navarro-Ortiz (jorgenavarro@ugr.es), University of Granada, 2021
+#
 
 from ryu.base import app_manager
 from ryu.controller import ofp_event
@@ -40,7 +43,8 @@ class SimpleSwitch13(app_manager.RyuApp):
         # "Virtual" MAC and IP addresses of the SDN-based application at the SDN controller
         self.mac_addr = '11:22:33:44:55:66'
         self.ip_addr  = '192.168.1.100'
-        self.topic_to_multicast = {}
+        self.topicToMulticast = {}
+        self.multicastReceiverForTopic = {}
         self.firstMulticastIPAddress = '225.0.0.0'
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
@@ -194,48 +198,78 @@ class SimpleSwitch13(app_manager.RyuApp):
             # Check if the topic was already included (so it has a corresponding multicast IP address) or it is new (so it requires a new multicast IP address)
             # multicastIPAddress is a string representing the IP address, e.g. '225.0.0.0'
             topic = pkt_mqtt2multicast.mqtt2multicastTopic
-            if topic in self.topic_to_multicast:
+            flags = pkt_mqtt2multicast.mqtt2multicastFlags
+
+            if topic in self.topicToMulticast:
                 # Topic already exists
-                multicastIPAddress = self.topic_to_multicast[topic]
+                multicastIPAddress = self.topicToMulticast[topic]
                 self.logger.info("### %s > MQTT2MULTICAST - multicast IP address already assigned to existing topic ('%s'): %s", now, topic.decode(), multicastIPAddress)
 
             else:
                 # New topic
-                numberOfTopics = len(self.topic_to_multicast)
+                numberOfTopics = len(self.topicToMulticast)
 
                 multicastIPAddress = self._get_nth_multicast_ip_address(numberOfTopics) # The first multicast IP address has index=0
                 self.logger.info("### %s > MQTT2MULTICAST - multicast IP address assigned to new topic ('%s'): %s", now, topic.decode(), multicastIPAddress)
-                self.topic_to_multicast[topic] = multicastIPAddress
+                self.topicToMulticast[topic] = multicastIPAddress
+
+            if flags == 1:
+                # The sender subscribes to this multicast IP address
+                self.logger.info("### %s > MQTT2MULTICAST - subscribe %s to the multicast IP address %s", now, pkt_ipv4.src, multicastIPAddress)
+                if topic.decode() in self.multicastReceiverForTopic:
+                    multicastReceiverForThisTopic = self.multicastReceiverForTopic[topic.decode()]
+                    multicastReceiverForThisTopic.append(pkt_ipv4.src)
+                else:
+                    self.multicastReceiverForTopic[topic.decode()] = [pkt_ipv4.src]
+                self.logger.info("### %s > MQTT2MULTICAST - multicast receivers for topic %s: %s", now, topic.decode(), self.multicastReceiverForTopic[topic.decode()])                    
+
+            elif flags == 2:
+                # The sender unsubscribes to this multicast IP address
+                self.logger.info("### %s > MQTT2MULTICAST - unsubscribe %s from the multicast IP address %s", now, pkt_ipv4.src, multicastIPAddress)
+                #for topic in self.multicastReceiverForTopic.copy():
+                multicastReceiverList = self.multicastReceiverForTopic[topic.decode()]
+                multicastReceiverList = [x for x in multicastReceiverList if not(x == pkt_ipv4.src)] # Removing based on the content of the first element. 
+                                                                                                         # Maybe list comprehension is not the best for performance, but it works...
+                self.multicastReceiverForTopic[topic.decode()] = multicastReceiverList                        # Required since subscribersList is now a different object
+                # If this key has no content, remove it from the dictionary
+                if not self.multicastReceiverForTopic[topic.decode()]:
+                    del self.multicastReceiverForTopic[topic.decode()]
+                    self.logger.info("### %s > MQTT2MULTICAST - no multicast receivers for topic %s", now, topic.decode())
+                else:
+                    self.logger.info("### %s > MQTT2MULTICAST - multicast receivers for topic %s: %s", now, topic.decode(), self.multicastReceiverForTopic[topic.decode()])
+
 
             # Create a new packet MQTT2MULTICAST REPLY to be sent
-            pkt = packet.Packet()
+            if flags == 0 or flags == 1:
+                pkt = packet.Packet()
 
-                # Add Ethernet header
-            pkt.add_protocol(ethernet.ethernet(ethertype=pkt_ethernet.ethertype,
-                                               dst=pkt_ethernet.src,
-                                               src=self.mac_addr))
+                    # Add Ethernet header
+                pkt.add_protocol(ethernet.ethernet(ethertype=pkt_ethernet.ethertype,
+                                                   dst=pkt_ethernet.src,
+                                                   src=self.mac_addr))
 
-                # Add IP header
-            pkt.add_protocol(ipv4.ipv4(dst=pkt_ipv4.src,
-                                       src=self.ip_addr,
-                                       proto=pkt_ipv4.proto))
+                    # Add IP header
+                pkt.add_protocol(ipv4.ipv4(dst=pkt_ipv4.src,
+                                           src=self.ip_addr,
+                                           proto=pkt_ipv4.proto))
 
-                # Add UDP header
-            pkt.add_protocol(udp.udp(src_port=pkt_udp.dst_port, 
-                                     dst_port=pkt_udp.src_port))
+                    # Add UDP header
+                pkt.add_protocol(udp.udp(src_port=pkt_udp.dst_port, 
+                                         dst_port=pkt_udp.src_port))
 
-                # Add MQTT2MULTICAST application packet
-            pkt.add_protocol(mqtt2multicast.mqtt2multicast(mqtt2multicastPacketType=2,
-                                                           mqtt2multicastTransactionID=pkt_mqtt2multicast.mqtt2multicastTransactionID,
-                                                           mqtt2multicastTopicSize=None,
-                                                           mqtt2multicastTopic=None,
-                                                           mqtt2multicastIPAddress=addrconv.ipv4.text_to_bin(multicastIPAddress)))
+                    # Add MQTT2MULTICAST application packet
+                pkt.add_protocol(mqtt2multicast.mqtt2multicast(mqtt2multicastPacketType=2,
+                                                               mqtt2multicastTransactionID=pkt_mqtt2multicast.mqtt2multicastTransactionID,
+                                                               mqtt2multicastFlags=0,
+                                                               mqtt2multicastTopicSize=None,
+                                                               mqtt2multicastTopic=None,
+                                                               mqtt2multicastIPAddress=addrconv.ipv4.text_to_bin(multicastIPAddress)))
 
-            # Send packet
-            now = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
-            self.logger.info("### %s > MQTT2MULTICAST REPLY sent (%s) to %s", now, pkt, pkt_ipv4.src)
+                # Send packet
+                now = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
+                self.logger.info("### %s > MQTT2MULTICAST REPLY sent (%s) to %s", now, pkt, pkt_ipv4.src)
 
-            self._send_packet(datapath, in_port, pkt)
+                self._send_packet(datapath, in_port, pkt)
 
             return
 
@@ -256,7 +290,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         # n starts at 0, i.e. the first multicast IP address would be self._get_nth_multicast_ip_address(0)
 
         (forthByte, thirdByte, secondByte, firstByte) = struct.unpack('BBBB', socket.inet_aton(self.firstMulticastIPAddress))
-        #self.logger.info("*** multicastIPAddress: %s.%s.%s.%s", forthByte, thirdByte, secondByte, firstByte)
+        #self.logger.info("### multicastIPAddress: %s.%s.%s.%s", forthByte, thirdByte, secondByte, firstByte)
 
         auxFirstByte = firstByte + n
         auxSecondByte = secondByte + int(auxFirstByte / 256)
@@ -271,11 +305,4 @@ class SimpleSwitch13(app_manager.RyuApp):
         multicastIPAddress = str(auxForthByte) + '.' + str(auxThirdByte) + '.' + str(auxSecondByte) + '.' + str(auxFirstByte)
 
         return multicastIPAddress
-
-
-    def ip2int(addr):
-        return struct.unpack("!I", socket.inet_aton(addr))[0]
-
-    def int2ip(addr):
-        return socket.inet_ntoa(struct.pack("!I", addr))
 
