@@ -102,8 +102,6 @@ class MQTTProxy:
 
       print("[%s] %s (TCP port %d) disconnected. TOPICS-SUBSCRIBERS list: %s" % (threading.currentThread().getName(), srcIPAddress, tcpPort, subscribersForTopic))
 
-      # *** FOR TESTING *** MQTT DISCONNECT should only be sent if there is no other subscriber subscribed to this topic in this proxy ***
-
    def _timerExpiration(self, p, connected):
        print("[%s] Keep alive (MQTT PING REQUEST) timeout!!!" % (threading.currentThread().getName()))
        self._disconnect(p[IP].dst, p[IP].src, p[TCP].sport, connected)
@@ -160,13 +158,14 @@ class MQTTProxy:
                   print("Broadcasting MQTT PUBLISH - sending message %s to %s (TCP port %d) with topic %s and QoS %d" % (message, ipAddress, tcpPort, topic, QOS))
 
                   index = tuple([ipAddress,tcpPort])
-                  ipB = IP(src=p[IP].dst, dst=ipAddress)
+                  #ipB = IP(src=p[IP].dst, dst=ipAddress) # Avoid specifying the source address, since it will be incorrect for received multicast messages
+                  ipB = IP(dst=ipAddress)
                   tcpB = TCP(sport=self.tcpport, dport=tcpPort, flags='A', seq=tcpSeqList[index], ack=tcpAckList[index])
                   mqttB = MQTT()/MQTTPublish(topic=topic,value=message)
 #                  pdb.set_trace()
                   send(ipB/tcpB/mqttB)#, verbose=False)
                   threadName = threading.currentThread().getName()
-                  print ("[%s] %s MQTT PUBLISH sent! (seq=%d, ack=%d, len=%d)" % (threadName, index, tcpB.seq - tcpInitSeqList[index], tcpB.ack - tcpInitAckList[index], len(mqttB)))
+                  print ("[%s] %s MQTT PUBLISH sent! (src=%s, dst=%s, seq=%d, ack=%d, len=%d)" % (threadName, index, p[IP].dst, ipAddress, tcpB.seq - tcpInitSeqList[index], tcpB.ack - tcpInitAckList[index], len(mqttB)))
                   tcpSeqList[index] = tcpSeqList[index] + len(mqttB)
           else:
               print("Broadcasting MQTT PUBLISH - no one subscribed to topic %s" % (topic))
@@ -285,18 +284,26 @@ class MQTTProxy:
                 # Broadcast MQTT PUBLISH to subscribers connected to this proxy
                 self._broadcastMessageForTopic(p, topic.decode('utf-8'), message.decode('utf-8'))
 
-                # *** Send to multicast address ***
+                # Send to the multicast address assigned to this topic
                 if self.mqtt2multicast_ip_addr_server:
                     print("[%s] topicToMulticastBackup: %s, topic=%s" % (threadName, topicToMulticastBackup, topic.decode()))
 
                     if topic.decode() in topicToMulticastBackup:
                         # Existing topic
                         multicastIPAddress = topicToMulticastBackup[topic.decode()]
-                        print("[%s] Multicasting the received MQTT PUBLISH message, multicast IP address=%s, topic=%s, message=%s" % (threadName, multicastIPAddress, topic.decode(), message.decode()))
+                        print("[%s] Multicasting the received MQTT PUBLISH message, src=%s, multicast IP address=%s, topic=%s, message=%s" % (threadName, p[IP].dst, multicastIPAddress, topic.decode(), message.decode()))
+                        ethM = Ether(dst="FF:FF:FF:FF:FF:FF", src=p[Ether].dst) # Multicast not working if ethernet layer is not included in the packet
+                        ipM = IP(src=p[IP].dst, dst=multicastIPAddress, ttl=1)  # TTL=1 to avoid flooding packets beyond this network
+                        udpM = UDP(sport=self.udpport, dport=self.udpport)
+                        mqttM = p[MQTT]
+#                        pdb.set_trace()
+                        sendp(ethM/ipM/udpM/mqttM, verbose=False)
+
                     else:
                         print("[%s] ERROR!!!! Trying to multicast the received MQTT PUBLISH message, but no nulticast IP address was found for topic=%s. Wait 10s for a MQTT2MULTICAST REPLY message." % (threadName, topic.decode()))
                         waiting = True
                         i=0
+                        # Typically only one second (one attempt) has to be wait if everything is ok
                         while waiting:
                             time.sleep(1.0)
                             i = i + 1
@@ -305,7 +312,14 @@ class MQTTProxy:
                             if topic.decode() in topicToMulticastBackup:
                                 waiting = False
                                 multicastIPAddress = topicToMulticastBackup[topic.decode()]
-                                print("[%s] Multicasting the received MQTT PUBLISH message, multicast IP address=%s, topic=%s, message=%s" % (threadName, multicastIPAddress, topic.decode(), message.decode()))
+                                print("[%s] Multicasting the received MQTT PUBLISH message, src=%s, multicast IP address=%s, topic=%s, message=%s" % (threadName, p[IP].dst, multicastIPAddress, topic.decode(), message.decode()))
+                                ethM = Ether(dst="FF:FF:FF:FF:FF:FF", src=p[Ether].dst) # Multicast not working if ethernet layer is not included in the packet
+                                ipM = IP(src=p[IP].dst, dst=multicastIPAddress, ttl=1)  # TTL=1 to avoid flooding packets beyond this network
+                                udpM = UDP(sport=self.udpport, dport=self.udpport)
+                                mqttM = p[MQTT]
+#                                pdb.set_trace()
+                                sendp(ethM/ipM/udpM/mqttM, verbose=False)
+
                             elif i >= 10:
                                 waiting = False
                                 print("[%s] No MQTT2MULTICAST REPLY message received, discarding MQTT PUBLISH message (topic=%s, message=%s)" % (threadName, multicastIPAddress, topic.decode(), message.decode()))
