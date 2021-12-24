@@ -255,7 +255,7 @@ class MQTTProxy:
                 keepAlive = p[MQTT].klive
                 ip = IP(src=p[IP].dst, dst=p[IP].src)
                 tcp = TCP(sport=self.tcpport, dport=p[TCP].sport, flags='A', seq=tcpSeqList[index], ack=tcpAckList[index])
-                if p[MQTT].username.decode('utf-8') == self.username and p[MQTT].password.decode('utf-8') == self.password:
+                if p[MQTT].username.decode() == self.username and p[MQTT].password.decode() == self.password:
                     mqtt = MQTT()/MQTTConnack(sessPresentFlag=1,retcode=0)
                     print("[%s] %s MQTT CONNECT received (seq=%d, ack=%d, len=%d), correct user/password, keepAlive=%d" % (threadName, index, p[TCP].seq - tcpInitAckList[index], p[TCP].ack - tcpInitSeqList[index], len(p[MQTT]), keepAlive))
                 else:
@@ -282,7 +282,7 @@ class MQTTProxy:
                         self._checkIfTopicIsNewMQTT2MULTICAST(p[IP].dst, topic, 0)
 
                 # Broadcast MQTT PUBLISH to subscribers connected to this proxy
-                self._broadcastMessageForTopic(p, topic.decode('utf-8'), message.decode('utf-8'))
+                self._broadcastMessageForTopic(p, topic.decode(), message.decode())
 
                 # Send to the multicast address assigned to this topic
                 if self.mqtt2multicast_ip_addr_server:
@@ -329,15 +329,18 @@ class MQTTProxy:
                             if topic.decode() in topicToMulticast:
                                 del topicToMulticast[topic.decode()]
 
-                # Forward MQTT PUBLISH to forwarder using UDP
+                # Forward MQTT PUBLISH to forwarder using UDP ***
                 if self.forwarders:
-                    for i in range(len(self.forwarders)):
-                        forwarder = self.forwarders[i]
-                        ipF = IP(src=p[IP].dst, dst=forwarder)
-                        udpF = UDP(sport=self.udpport, dport=self.udpport)
-                        mqttF = p[MQTT]
+                    if topic.decode() in forwardersForTopic:
+                        forwardersForThisTopic = forwardersForTopic[topic.decode()]
 #                        pdb.set_trace()
-                        send(ipF/udpF/mqttF, verbose=False)
+                        for i in range(len(forwardersForThisTopic[0])):
+                            forwarder = forwardersForThisTopic[0][i]
+                            ipF = IP(src=p[IP].dst, dst=forwarder)
+                            udpF = UDP(sport=self.udpport, dport=self.udpport)
+                            mqttF = p[MQTT]
+#                            pdb.set_trace()
+                            send(ipF/udpF/mqttF, verbose=False)
 
             elif p[MQTT].type == 8:
                 # MQTT SUBSCRIBE received, sending MQTT SUBACK
@@ -354,13 +357,13 @@ class MQTTProxy:
 
                 # Add subscriber to the list of topics (list of lists)
                 with subscribersForTopic_lock:
-                    if topic.decode('utf-8') in subscribersForTopic:
+                    if topic.decode() in subscribersForTopic:
                         # Existing topic
-                        subscribersForThisTopic = subscribersForTopic[topic.decode('utf-8')]
+                        subscribersForThisTopic = subscribersForTopic[topic.decode()]
                         subscribersForThisTopic.append([ipAddress, tcpPort, QOS])
                     else:
                         # New topic
-                        subscribersForTopic[topic.decode('utf-8')] = [[ipAddress, tcpPort, QOS]]
+                        subscribersForTopic[topic.decode()] = [[ipAddress, tcpPort, QOS]]
 
                         # If the topic is new, forward MQTT SUBSCRIBE to forwarder using UDP
                         if self.forwarders:
@@ -371,7 +374,7 @@ class MQTTProxy:
                                 mqttF = p[MQTT]
                                 send(ipF/udpF/mqttF, verbose=False)
 
-                print("[%s] %s Subscribers list for this topic: %s" % (threadName, index, subscribersForTopic[topic.decode('utf-8')]))
+                print("[%s] %s Subscribers list for this topic: %s" % (threadName, index, subscribersForTopic[topic.decode()]))
                 print("[%s] %s TOPICS-SUBSCRIBERS list:         %s" % (threadName, index, subscribersForTopic))
 
                 ip = IP(src=p[IP].dst, dst=p[IP].src)
@@ -492,13 +495,13 @@ class MQTTProxy:
 
                  # Add subscriber to the list of topics (list of lists)
                  with forwardersForTopic_lock:
-                     if topic.decode('utf-8') in forwardersForTopic:
+                     if topic.decode() in forwardersForTopic:
                          # Existing topic
-                         forwardersForThisTopic = forwardersForTopic[topic.decode('utf-8')]
+                         forwardersForThisTopic = forwardersForTopic[topic.decode()]
                          forwardersForThisTopic.append([forwarderIPAddress])
                      else:
                          # New topic
-                         forwardersForTopic[topic.decode('utf-8')] = [[forwarderIPAddress]]
+                         forwardersForTopic[topic.decode()] = [[forwarderIPAddress]]
                      print("[FORWARDER] forwardersForTopic: %s" % (forwardersForTopic))
 
              elif p[MQTT].type == 11:
@@ -526,7 +529,7 @@ class MQTTProxy:
                  message=p[MQTT][1].value
                  print("[FORWARDER] MQTT PUBLISH received, topic=%s, message=%s" % (topic, message))
                  # Broadcast MQTT PUBLISH to subscribers connected to this proxy
-                 self._broadcastMessageForTopic(p, topic.decode('utf-8'), message.decode('utf-8'))
+                 self._broadcastMessageForTopic(p, topic.decode(), message.decode())
 
    def _start_udpForwarderThread(self):
       print ("Starting thread UDPForwarderThread to forward MQTT using UDP...")
@@ -574,6 +577,9 @@ def main():
     # Initialization
     forwarders = list()
     udpport = 0
+    mqtt2multicast_ip_addr_server = None
+    mqtt2multicast_udp_port_server = 0
+    mqtt2multicast_udp_port_client = 0
 
     # Required to interprete UDP packets on port 1883 as MQTT
     bind_layers(UDP, MQTT, sport=1883)
