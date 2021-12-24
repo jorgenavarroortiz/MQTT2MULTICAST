@@ -22,4 +22,4 @@ if [[ $? == 1 ]]; then
 fi
 
 # Execute Python MQTT proxy program
-python3 ./mqtt_proxy.py -t ${MQTTPORT} -u ${USERNAME} -p ${PASSWORD} -F ${FORWARDER} -U ${UDPPORT}
+python3 ./mqtt_proxy_m2m.py -t ${MQTTPORT} -u ${USERNAME} -p ${PASSWORD} -F ${FORWARDER} -U ${UDPPORT}

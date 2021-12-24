@@ -329,7 +329,7 @@ class MQTTProxy:
                             if topic.decode() in topicToMulticast:
                                 del topicToMulticast[topic.decode()]
 
-                # Forward MQTT PUBLISH to forwarder using UDP ***
+                # Forward MQTT PUBLISH to forwarder using UDP
                 if self.forwarders:
                     if topic.decode() in forwardersForTopic:
                         forwardersForThisTopic = forwardersForTopic[topic.decode()]
