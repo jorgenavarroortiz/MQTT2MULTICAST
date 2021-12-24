@@ -17,7 +17,11 @@ This implementation has two objectives:
 
 The forwarders may use UDP or multicast:
 - When using UDP, the MQTT proxy will send an MQTT SUBSCRIBE message to the other proxies as soon as the first MQTT client subscribes to a new topic. When the last of the subscribers for that topic is disconnected, an MQTT UNSUBSCRIBE message is sent to the other proxies. MQTT PUBLISH messages are forwarded only to other proxies that have at least one subscriber for that specific topic (not forwarded otherwise).
-- When using multicast, the forwarders will ask the MQTT2MULTICAST server which multicast IP address (starting e.g. from 225.0.0.0) is assigned to this specific topic using an MQTT2MULTICAST REQUEST message. The MQTT2MULTICAST will assign multicast IP addresses to topics by following the order of the requests, and will respond with an MQTT2MULTICAST REPLY message. The MQTT2MULTICAST server will store the IP addresses of the MQTT proxies that are subscribed to specific topics, so this may be used to create a multicast tree for routing the multicast messages based on their destination multicast IP address. [MULTICAST ROUTING based on this information is to be implemented]
+- When using multicast, the forwarders will ask the MQTT2MULTICAST server which multicast IP address (starting e.g. from 225.0.0.0) is assigned to this specific topic using an MQTT2MULTICAST REQUEST message. The MQTT2MULTICAST will assign multicast IP addresses to topics by following the order of the requests, and will respond with an MQTT2MULTICAST REPLY message. The MQTT2MULTICAST server will store the IP addresses of the MQTT proxies that are subscribed to specific topics, so this may be used to create a multicast tree for routing the multicast messages based on their destination multicast IP address. 
+
+**MULTICAST ROUTING based on this information is to be implemented**
+
+In order to implement multicast routing, the RYU application `xxx` has the following variables: `multicastReceiverForTopic`, which includes a list of receivers (IP addresses) for a specific topic, and `topicToMulticast`, which translates between the topic space and the multicast IP addresses space. Thus, with both variables, we should be able to generate, on the RYU application, the corresponding flow rules for the switches to transmit the multicast messages to their corresponding receivers (i.e. create a multicast tree for each topic/multicast IP address).
 
 Implementation details:
 
@@ -129,4 +133,4 @@ mosquitto_pub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd" -m "message1"
 
 The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward the PUBLISH messages from one publisher (host `h3`) to one subscriber (host `h2`) using multicast.
 
-[***INCLUDE A PICTURE HERE***]
+![image](https://user-images.githubusercontent.com/17797704/147364627-2c40656d-000c-47bb-b002-cf6213739473.png)
