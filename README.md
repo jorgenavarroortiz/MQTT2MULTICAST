@@ -23,7 +23,11 @@ The forwarders may use UDP or multicast:
 
 In order to implement multicast routing, the RYU application `xxx` has the following variables: `multicastReceiverForTopic`, which includes a list of receivers (IP addresses) for a specific topic, and `topicToMulticast`, which translates between the topic space and the multicast IP addresses space. Thus, with both variables, we should be able to generate, on the RYU application, the corresponding flow rules for the switches to transmit the multicast messages to their corresponding receivers (i.e. create a multicast tree for each topic/multicast IP address).
 
-Implementation details:
+**MQTT2MULTICAST protocol**
+
+[Explain here the messages and handshake]
+
+**Other implementation details**
 
 - Please make sure that you **use Scapy 2.4.4** (``pip install scapy==2.4.4``). The ``sniff()`` function does not work with a list of network interfaces in version 2.4.5. Tested with ``mosquitto_sub`` and ``mosquitto_pub`` tools (see the examples below).
 
