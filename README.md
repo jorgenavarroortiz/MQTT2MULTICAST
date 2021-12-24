@@ -21,7 +21,7 @@ The forwarders may use UDP or multicast:
 
 Implementation details:
 
-- Please make sure that you **use Scapy 2.4.4** (``pip install scapy==2.4.4``). The ``sniff()`` function does not work with a list of network interfaces in version 2.4.5. Tested with ``mosquitto_sub`` and ``mosquitto_pub`` tools (see example in the picture below).
+- Please make sure that you **use Scapy 2.4.4** (``pip install scapy==2.4.4``). The ``sniff()`` function does not work with a list of network interfaces in version 2.4.5. Tested with ``mosquitto_sub`` and ``mosquitto_pub`` tools (see the examples below).
 
 - To avoid the kernel resetting the TCP connection (since there is no socket open from the kernel's point of view), we have to avoid sending TCP RESET packets to the publisher/subscriber using e.g. ``iptables``. Similarly to avoid ICMP destination unreachable because there is no application receiving the UDP packets. In order to simplify this (and to include the arguments required for the Python script), we have created Bash scripts (``mqtt_proxyX.sh``).
 
