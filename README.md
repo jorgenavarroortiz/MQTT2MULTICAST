@@ -78,8 +78,55 @@ mosquitto_pub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd" -m "message1"
 
 The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward the PUBLISH messages from one publisher (host `h3`) to one subscriber (host `h2`).
 
-<img src="https://github.com/jorgenavarroortiz/MQTT-proxy-SCAPY/raw/main/img/scapy-mqtt-proxy.png" width="800">
+[***INCLUDE A PICTURE HERE***]
 
 ## Experiment using multicast to forward MQTT messages within the SDN network
 
-[to be written]
+In this example, MQTT PUBLISH messages will be forwarded using multicast IP addresses between any MQTT proxy connected to the SDN network with at least one subscriber subscribed to that topic.
+
+This experiment uses `mininet` with a tree topology with a 3 switches (one root, `s1`, and two leaves, `s2` and `s3`) which connect two hosts to each leaf (`h1` and `h2` to `s2` and `h3` and `h4` to `s3`). `h1` and `h4` will act as MQTT proxies. `h2` will be an MQTT subscriber, subscribed to topic `topic1`, whereas `h3` will be an MQTT publisher, which will publish a message on that topic.
+
+Steps to execute the experiment:
+- Clone this repository:
+```
+cd $HOME
+git clone https://github.com/jorgenavarroortiz/MQTT2MULTICAST.git
+```
+- Open a terminal to execute RYU with the MQTT2MULTICAST server app:
+```
+cd ~/MQTT2MULTICAST/RYU
+python3 ./bin/ryu-manager --verbose ryu/app/simple_switch_13_MQTT2MULTICAST.py
+```
+- Open a terminal to execute mininet (you can change `halfrtt` and `use_real_interface`, as required for the particular experiment, in the Python script for the topology):
+```
+cd ~/MQTT2MULTICAST
+sudo python ./mininet/topo_mqtt_lora_VM_bridged.py
+```
+- Open a terminal on `h1` (`xterm h1`, IP address 192.168.1.101) to execute the first MQTT proxy, which is configured to forward MQTT traffic to `h4` (IP address 192.168.1.104):
+```
+cd ~/MQTT2MULTICAST/SCAPY
+./mqtt_proxy1_m2m.sh
+```
+- Repeat on `h4` (`xterm h4`, IP address 192.168.1.104), so it will also forward MQTT traffic to `h1` (IP address 192.168.1.101):
+```
+cd ~/MQTT2MULTICAST/SCAPY
+./mqtt_proxy2_m2m.sh
+```
+
+Test that MQTT messages are being forwarded:
+- Execute a subscriber on `h2`:
+```
+mosquitto_sub -h 192.168.1.101 -t "topic1" -u "jorge" -P "pasaswd"
+```
+- Execute a publisher on `h3`:
+```
+mosquitto_pub -h 192.168.1.104 -t "topic1" -u "jorge" -P "passwd" -m "message1"
+```
+- `h3` can also publish connected to `h1` (i.e. both `h2` and `h3` connected to the same MQTT proxy):
+```
+mosquitto_pub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd" -m "message1"
+```
+
+The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward the PUBLISH messages from one publisher (host `h3`) to one subscriber (host `h2`) using multicast.
+
+[***INCLUDE A PICTURE HERE***]
