@@ -1,6 +1,6 @@
 # MQTT to multicast
 
-© Jorge Navarro-Ortiz (jorgenavarro@ugr.es), University of Granada
+© Jorge Navarro-Ortiz (jorgenavarro@ugr.es), University of Granada, 2021
 
 This repository is composed of two parts:
 
