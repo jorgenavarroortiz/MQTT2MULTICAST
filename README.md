@@ -78,7 +78,7 @@ mosquitto_pub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd" -m "message1"
 
 The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward the PUBLISH messages from one publisher (host `h3`) to one subscriber (host `h2`).
 
-[***INCLUDE A PICTURE HERE***]
+![image](https://user-images.githubusercontent.com/17797704/147362234-07a4e7ab-5b6c-417c-a49c-2e8a3ebd6a18.png)
 
 ## Experiment using multicast to forward MQTT messages within the SDN network
 
