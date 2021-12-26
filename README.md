@@ -138,3 +138,10 @@ mosquitto_pub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd" -m "message1"
 The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward the PUBLISH messages from one publisher (host `h3`) to one subscriber (host `h2`) using multicast.
 
 ![image](https://user-images.githubusercontent.com/17797704/147364627-2c40656d-000c-47bb-b002-cf6213739473.png)
+
+## Experiment using multicast with Shortest Path First routing to forward MQTT messages within the SDN network
+
+We will employ the `networkx` package (Python package for the creation, manipulation, and study of the structure, dynamics, and functions of complex networks):
+```
+python3 -m pip install networkx
+```
