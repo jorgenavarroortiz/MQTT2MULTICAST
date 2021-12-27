@@ -44,7 +44,7 @@ If no UDP forwarders are configured nor MQTT2MULTICAST server is configured, the
 
 ## Experiment using UDP to forward MQTT messages within the SDN network
 
-In this example, MQTT PUBLISH messages will be forwarded between two MQTT proxies. Only the first MQTT SUBSCRIBE message for a specific topic will be forwarded to the other MQTT proxy, so it will know that MQTT publish messages for that topic have to be forwarded. Only the MQTT UNSUBSCRIBE message for the last subscriber connected to a MQTT proxy will be forwarded to the other MQTT proxy, so it will know that it will not have to forward MQTT PUBLISH messages to that proxy.
+In this example, `MQTT PUBLISH` messages will be forwarded between two MQTT proxies. Only the first `MQTT SUBSCRIBE` message for a specific topic will be forwarded to the other MQTT proxy, so it will know that MQTT publish messages for that topic have to be forwarded. Only the `MQTT UNSUBSCRIBE` message for the last subscriber connected to a MQTT proxy will be forwarded to the other MQTT proxy, so it will know that it will not have to forward MQTT PUBLISH messages to that proxy.
 
 This experiment uses `mininet` with a tree topology with a 3 switches (one root, `s1`, and two leaves, `s2` and `s3`) which connect two hosts to each leaf (`h1` and `h2` to `s2` and `h3` and `h4` to `s3`). `h1` and `h4` will act as MQTT proxies. `h2` will be an MQTT subscriber, subscribed to topic `topic1`, whereas `h3` will be an MQTT publisher, which will publish a message on that topic.
 
@@ -95,7 +95,7 @@ The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward
 
 ## Experiment using multicast to forward MQTT messages within the SDN network
 
-In this example, MQTT PUBLISH messages will be forwarded using multicast IP addresses between any MQTT proxy connected to the SDN network with at least one subscriber subscribed to that topic.
+In this example, `MQTT PUBLISH` messages will be forwarded using multicast IP addresses between any MQTT proxy connected to the SDN network with at least one subscriber subscribed to that topic.
 
 This experiment uses `mininet` with a tree topology with a 3 switches (one root, `s1`, and two leaves, `s2` and `s3`) which connect two hosts to each leaf (`h1` and `h2` to `s2` and `h3` and `h4` to `s3`). `h1` and `h4` will act as MQTT proxies. `h2` will be an MQTT subscriber, subscribed to topic `topic1`, whereas `h3` will be an MQTT publisher, which will publish a message on that topic.
 
