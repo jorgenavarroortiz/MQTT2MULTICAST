@@ -32,6 +32,8 @@ The `packet type` can be 1 (`MQTT2MULTICAST REQUEST`) or 2 (`MQTT2MULTICAST REPL
 - If `packet type` is 1 (`MQTT2MULTICAST REQUEST`), the payload is composed of a `transaction ID` (4 bytes), a `flags` field (1 byte), the `topic size` (2 bytes) and the `topic` (variable length). If `flags` is 0, it means that the MQTT proxy is asking because a publisher will send an `MQTT PUBLISH` message. If `flags` is 1, it means that the MQTT proxy is asking because a subscriber will subscribe to that specific topic. If `flags` is 2, the subscriber will unsubscribe from that topic. If `flags` is 0 or 1, the MQTT2MULTICAST server will respond with an `MQTT2MULTICAST REPLY`, informing about the multicast IP address associated to the `topic`. If `flags` is 2, no response is required.
 - If `packet type` is 2 (`MQTT2MULTICAST REPLY`), the payload is composed of a `transaction ID` (4 bytes) (which shall match the `transaction ID` of the `MQTT2MULTICAST REQUEST`), a `flags`field (1 byte) (always 0 for `MQTT2MULTICAST REPLY`, reserved for future uses) and a `multicast IP address` (4 bytes) associated with the topic in the `MQTT2MULTICAST REQUEST` message.
 
+[
+
 **Other implementation details**
 
 - Please make sure that you **use Scapy 2.4.4** (``pip install scapy==2.4.4``). The ``sniff()`` function does not work with a list of network interfaces in version 2.4.5. Tested with ``mosquitto_sub`` and ``mosquitto_pub`` tools (see the examples below).
