@@ -21,11 +21,16 @@ The forwarders may use UDP or multicast:
 
 **MULTICAST ROUTING based on this information is to be implemented**
 
-In order to implement multicast routing, the RYU application `xxx` has the following variables: `multicastReceiverForTopic`, which includes a list of receivers (IP addresses) for a specific topic, and `topicToMulticast`, which translates between the topic space and the multicast IP addresses space. Thus, with both variables, we should be able to generate, on the RYU application, the corresponding flow rules for the switches to transmit the multicast messages to their corresponding receivers (i.e. create a multicast tree for each topic/multicast IP address).
+In order to implement multicast routing, the RYU application `simple_switch_13_MQTT2MULTICAST.py` has the following variables: `multicastReceiverForTopic`, which includes a list of receivers (IP addresses) for a specific topic, and `topicToMulticast`, which translates between the topic space and the multicast IP addresses space. Thus, with both variables, we should be able to generate, on the RYU application, the corresponding flow rules for the switches to transmit the multicast messages to their corresponding receivers (i.e. create a multicast tree for each topic/multicast IP address).
 
 **MQTT2MULTICAST protocol**
 
-[Explain here the messages and handshake]
+This protocol allows an MQTT proxy to translate a specific topic to a multicast IP address. An MQTT2MULTICAST packet consists of two parts in the following order:
+- `Packet type` (1 byte)
+- Payload
+The `packet type` can be 1 (`MQTT2MULTICAST REQUEST`) or 2 (`MQTT2MULTICAST REPLY`). The payload depends on the packet type:
+- If `packet type` is 1 (`MQTT2MULTICAST REQUEST`), the payload is composed of a `transaction ID` (4 bytes), a `flags` field (1 byte), the `topic size` (2 bytes) and the `topic` (variable length). If `flags` is 0, it means that the MQTT proxy is asking because a publisher will send an `MQTT PUBLISH` message. If `flags` is 1, it means that the MQTT proxy is asking because a subscriber will subscribe to that specific topic. If `flags` is 2, the subscriber will unsubscribe from that topic. If `flags` is 0 or 1, the MQTT2MULTICAST server will respond with an `MQTT2MULTICAST REPLY`, informing about the multicast IP address associated to the `topic`. If `flags` is 2, no response is required.
+- If `packet type` is 2 (`MQTT2MULTICAST REPLY`), the payload is composed of a `transaction ID` (4 bytes), which shall match the `transaction ID` of the `MQTT2MULTICAST REQUEST`), a `flags`field (1 byte) (always 0 for `MQTT2MULTICAST REPLY`, reserved for future uses) and a `multicast IP address` (4 bytes) associated with the topic in the `MQTT2MULTICAST REQUEST` message.
 
 **Other implementation details**
 
