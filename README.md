@@ -10,7 +10,7 @@ This repository is composed of two parts:
 This implementation has two objectives:
 
 1) The MQTT proxy is intended to split the TCP connection within an SDN scenario, using MQTT proxies at the edge switches. These proxies:
-- Act as a broker from the subscriber/publisher perspective connected to that SDN switch
+- Act as a broker from the subscriber/publisher perspective connected to that SDN switch.
 - Forward MQTT messages to forwarders (which may be another MQTT proxy) over UDP. 
 
 2) Leverage MQTT over UDP to employ multicast within the SDN network to forward MQTT PUBLISH messages.
