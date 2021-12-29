@@ -10,20 +10,31 @@ This repository is composed of two parts:
 This implementation has two objectives:
 
 1) The MQTT proxy is intended to split the TCP connection within an SDN scenario, using MQTT proxies at the edge switches. These proxies:
-- Act as a broker from the subscriber/publisher perspective connected to that SDN switch
+- Act as a broker from the subscriber/publisher perspective connected to that SDN switch.
 - Forward MQTT messages to forwarders (which may be another MQTT proxy) over UDP. 
 
-2) Leverage MQTT over UDP to employ multicast within the SDN network to forward MQTT PUBLISH messages.
+2) Leverage MQTT over UDP to employ multicast within the SDN network to forward `MQTT PUBLISH` messages.
 
 The forwarders may use UDP or multicast:
-- When using UDP, the MQTT proxy will send an MQTT SUBSCRIBE message to the other proxies as soon as the first MQTT client subscribes to a new topic. When the last of the subscribers for that topic is disconnected, an MQTT UNSUBSCRIBE message is sent to the other proxies. MQTT PUBLISH messages are forwarded only to other proxies that have at least one subscriber for that specific topic (not forwarded otherwise).
-- When using multicast, the forwarders will ask the MQTT2MULTICAST server which multicast IP address (starting e.g. from 225.0.0.0) is assigned to this specific topic using an MQTT2MULTICAST REQUEST message. The MQTT2MULTICAST will assign multicast IP addresses to topics by following the order of the requests, and will respond with an MQTT2MULTICAST REPLY message. The MQTT2MULTICAST server will store the IP addresses of the MQTT proxies that are subscribed to specific topics, so this may be used to create a multicast tree for routing the multicast messages based on their destination multicast IP address. 
+- When using UDP, the MQTT proxy will send an `MQTT SUBSCRIBE` message to the other proxies as soon as the first MQTT client subscribes to a new topic. When the last of the subscribers for that topic is disconnected, an `MQTT UNSUBSCRIBE` message is sent to the other proxies. `MQTT PUBLISH` messages are forwarded only to other proxies that have at least one subscriber for that specific topic (not forwarded otherwise).
+- When using multicast, the forwarders will ask the MQTT2MULTICAST server which multicast IP address (starting e.g. from 225.0.0.0) is assigned to this specific topic using an `MQTT2MULTICAST REQUEST` message. The MQTT2MULTICAST server will assign multicast IP addresses to topics by following the order of the requests, and will respond with an `MQTT2MULTICAST REPLY` message. The MQTT2MULTICAST server will store the IP addresses of the MQTT proxies that are subscribed to specific topics, so this may be used to create a multicast tree for routing the multicast messages based on their destination multicast IP address. 
 
 **MULTICAST ROUTING based on this information is to be implemented**
 
-In order to implement multicast routing, the RYU application `xxx` has the following variables: `multicastReceiverForTopic`, which includes a list of receivers (IP addresses) for a specific topic, and `topicToMulticast`, which translates between the topic space and the multicast IP addresses space. Thus, with both variables, we should be able to generate, on the RYU application, the corresponding flow rules for the switches to transmit the multicast messages to their corresponding receivers (i.e. create a multicast tree for each topic/multicast IP address).
+In order to implement multicast routing, the RYU application `simple_switch_13_MQTT2MULTICAST.py` has the following variables: `multicastReceiverForTopic`, which includes a list of subscribers (IP addresses) for a specific topic, and `topicToMulticast`, which translates between the topic space and the multicast IP addresses space. Thus, with both variables, we should be able to generate, on the RYU application, the corresponding flow rules for the switches to transmit the multicast messages to their corresponding receivers (i.e. create a multicast tree for each topic/multicast IP address).
 
-Implementation details:
+**MQTT2MULTICAST protocol**
+
+This protocol allows an MQTT proxy to translate a specific topic to a multicast IP address. An MQTT2MULTICAST packet consists of two parts in the following order:
+- `Packet type` (1 byte)
+- Payload
+The `packet type` can be 1 (`MQTT2MULTICAST REQUEST`) or 2 (`MQTT2MULTICAST REPLY`). The payload depends on the packet type:
+- If `packet type` is 1 (`MQTT2MULTICAST REQUEST`), the payload is composed of a `transaction ID` (4 bytes), a `flags` field (1 byte), the `topic size` (2 bytes) and the `topic` (variable length). If `flags` is 0, it means that the MQTT proxy is asking because a publisher will send an `MQTT PUBLISH` message. If `flags` is 1, it means that the MQTT proxy is asking because a subscriber will subscribe to that specific topic. If `flags` is 2, the subscriber will unsubscribe from that topic. If `flags` is 0 or 1, the MQTT2MULTICAST server will respond with an `MQTT2MULTICAST REPLY`, informing about the multicast IP address associated to the `topic`. If `flags` is 2, no response is required.
+- If `packet type` is 2 (`MQTT2MULTICAST REPLY`), the payload is composed of a `transaction ID` (4 bytes) (which shall match the `transaction ID` of the `MQTT2MULTICAST REQUEST`), a `flags`field (1 byte) (always 0 for `MQTT2MULTICAST REPLY`, reserved for future uses) and a `multicast IP address` (4 bytes) associated with the topic in the `MQTT2MULTICAST REQUEST` message.
+
+[
+
+**Other implementation details**
 
 - Please make sure that you **use Scapy 2.4.4** (``pip install scapy==2.4.4``). The ``sniff()`` function does not work with a list of network interfaces in version 2.4.5. Tested with ``mosquitto_sub`` and ``mosquitto_pub`` tools (see the examples below).
 
@@ -35,7 +46,7 @@ If no UDP forwarders are configured nor MQTT2MULTICAST server is configured, the
 
 ## Experiment using UDP to forward MQTT messages within the SDN network
 
-In this example, MQTT PUBLISH messages will be forwarded between two MQTT proxies. Only the first MQTT SUBSCRIBE message for a specific topic will be forwarded to the other MQTT proxy, so it will know that MQTT publish messages for that topic have to be forwarded. Only the MQTT UNSUBSCRIBE message for the last subscriber connected to a MQTT proxy will be forwarded to the other MQTT proxy, so it will know that it will not have to forward MQTT PUBLISH messages to that proxy.
+In this example, `MQTT PUBLISH` messages will be forwarded between two MQTT proxies. Only the first `MQTT SUBSCRIBE` message for a specific topic will be forwarded to the other MQTT proxy, so it will know that MQTT publish messages for that topic have to be forwarded. Only the `MQTT UNSUBSCRIBE` message for the last subscriber connected to a MQTT proxy will be forwarded to the other MQTT proxy, so it will know that it will not have to forward `MQTT PUBLISH` messages to that proxy.
 
 This experiment uses `mininet` with a tree topology with a 3 switches (one root, `s1`, and two leaves, `s2` and `s3`) which connect two hosts to each leaf (`h1` and `h2` to `s2` and `h3` and `h4` to `s3`). `h1` and `h4` will act as MQTT proxies. `h2` will be an MQTT subscriber, subscribed to topic `topic1`, whereas `h3` will be an MQTT publisher, which will publish a message on that topic.
 
@@ -86,7 +97,7 @@ The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward
 
 ## Experiment using multicast to forward MQTT messages within the SDN network
 
-In this example, MQTT PUBLISH messages will be forwarded using multicast IP addresses between any MQTT proxy connected to the SDN network with at least one subscriber subscribed to that topic.
+In this example, `MQTT PUBLISH` messages will be forwarded using multicast IP addresses between any MQTT proxy connected to the SDN network with at least one subscriber subscribed to that topic.
 
 This experiment uses `mininet` with a tree topology with a 3 switches (one root, `s1`, and two leaves, `s2` and `s3`) which connect two hosts to each leaf (`h1` and `h2` to `s2` and `h3` and `h4` to `s3`). `h1` and `h4` will act as MQTT proxies. `h2` will be an MQTT subscriber, subscribed to topic `topic1`, whereas `h3` will be an MQTT publisher, which will publish a message on that topic.
 
@@ -134,3 +145,10 @@ mosquitto_pub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd" -m "message1"
 The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward the PUBLISH messages from one publisher (host `h3`) to one subscriber (host `h2`) using multicast.
 
 ![image](https://user-images.githubusercontent.com/17797704/147364627-2c40656d-000c-47bb-b002-cf6213739473.png)
+
+## Experiment using multicast with Shortest Path First routing to forward MQTT messages within the SDN network
+
+We will employ the `networkx` package (Python package for the creation, manipulation, and study of the structure, dynamics, and functions of complex networks):
+```
+python3 -m pip install networkx
+```
