@@ -36,15 +36,15 @@ The `packet type` can be 1 (`MQTT2MULTICAST REQUEST`) or 2 (`MQTT2MULTICAST REPL
 
 - Please make sure that you **use Scapy 2.4.4** (``pip install scapy==2.4.4``). The ``sniff()`` function does not work with a list of network interfaces in version 2.4.5. Tested with ``mosquitto_sub`` and ``mosquitto_pub`` tools (see the examples below).
 
-- To avoid the kernel resetting the TCP connection (since there is no socket open from the kernel's point of view), we have to avoid sending TCP RESET packets to the publisher/subscriber using e.g. ``iptables``. Similarly to avoid ICMP destination unreachable because there is no application receiving the UDP packets. In order to simplify this (and to include the arguments required for the Python script), we have created Bash scripts (``mqtt_proxyX.sh``).
-
-See the launch scripts (``mqtt_proxy1.sh`` and similar) to get examples. You can also use the help (argument ``-h``) to see the syntax.
-
-- If no UDP forwarders are configured nor MQTT2MULTICAST server is configured, the program will act as a simple MQTT broker supporting QoS=0.
-
 - IPv6 has been disabled in hosts and switches to avoid too many messages in RYU's log.
 
 - You can select `learning switch` or `shortest path` for L2 routing in the script `~/RYU/ryu/app/simple_switch_13_MQTT2MULTICAST.py`. Please change the line `LEARNING_SWITCH = True` accordingly.
+
+- To avoid the kernel resetting the TCP connection (since there is no socket open from the kernel's point of view), we have to avoid sending TCP RESET packets to the publisher/subscriber using e.g. ``iptables``. Similarly to avoid ICMP destination unreachable because there is no application receiving the UDP packets. In order to simplify this (and to include the arguments required for the Python script), we have created Bash scripts (``mqtt_proxyX.sh``).
+
+- If no UDP forwarders are configured nor MQTT2MULTICAST server is configured, the program will act as a simple MQTT broker supporting QoS=0.
+
+See the launch scripts (``mqtt_proxy1.sh`` and similar) to get examples. You can also use the help (argument ``-h``) to see the syntax.
 
 ## Experiment using UDP to forward MQTT messages within the SDN network
 
