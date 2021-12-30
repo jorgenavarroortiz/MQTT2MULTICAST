@@ -65,7 +65,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         # Holds the topology data and structure
         self.topology_api_app = self
         self.net=nx.DiGraph()
-        self.switch_map = {}
+        self.switchMap = {} # Maps switch ID (datapath.id) to switch object (datapath)
+
+        # Holds the ARP cache
+        self.arpCache = {}
 
     # Handy function that lists all attributes in the given object
     def ls(self,obj):
@@ -78,7 +81,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         parser = datapath.ofproto_parser
 
         # For shortest path
-        self.switch_map.update({datapath.id: datapath})	
+        self.switchMap.update({datapath.id: datapath})
 
         # install table-miss flow entry
         #
@@ -138,7 +141,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         #################################################
 	# forwarded by shortest path
         pkt_arp = pkt.get_protocol(arp.arp)
-        if True: #if pkt_arp:
+        if pkt_arp:
             if not self.net.has_node(eth.src):
                 self.logger.info("### [TOPOLOGY] Add %s in self.net (switch %d, port %d)", eth.src, datapath.id, in_port)
                 self.net.add_node(eth.src)
@@ -146,6 +149,20 @@ class SimpleSwitch13(app_manager.RyuApp):
                 self.net.add_edge(datapath.id, eth.src, port=in_port)
                 self.logger.info("### [TOPOLOGY] List of nodes: %s", self.net.nodes())
                 self.logger.info("### [TOPOLOGY] List of links: %s", self.net.edges())
+
+                #self.logger.info("### [TOPOLOGY] pkt_arp: %s", pkt_arp)
+                if pkt_arp.opcode == 1:
+                    # ARP REQUEST
+                    self.arpCache.update({pkt_arp.src_mac: pkt_arp.src_ip})
+                    #pkt_arp: arp(dst_ip='192.168.1.102',dst_mac='00:00:00:00:00:00',hlen=6,hwtype=1,opcode=1,plen=4,proto=2048,src_ip='192.168.1.101',src_mac='00:00:00:00:00:01')
+                    self.logger.info("### [TOPOLOGY] ARP request (src_mac=%s, src_ip=%s, dst_ip=%s)", pkt_arp.src_mac, pkt_arp.src_ip, pkt_arp.dst_ip)
+                elif pkt_arp.opcode == 2:
+                    # ARP REPLY
+                    self.arpCache.update({pkt_arp.src_mac: pkt_arp.src_ip})
+                    #arp(dst_ip='192.168.1.101',dst_mac='00:00:00:00:00:01',hlen=6,hwtype=1,opcode=2,plen=4,proto=2048,src_ip='192.168.1.102',src_mac='00:00:00:00:00:02')
+                    self.logger.info("### [TOPOLOGY] ARP reply (src_mac=%s, src_ip=%s, dst_mac=%s, dst_ip=%s)", pkt_arp.src_mac, pkt_arp.src_ip, pkt_arp.dst_mac, pkt_arp.dst_ip)
+
+                self.logger.info("### [TOPOLOGY] ARP cache: %s", self.arpCache)
 
 
         ################################
@@ -222,18 +239,17 @@ class SimpleSwitch13(app_manager.RyuApp):
                                       in_port=in_port, actions=actions, data=data)
             datapath.send_msg(out)
 
-        # Test shortest path
-#        if self.net.has_node(eth.dst):
-#            self.logger.info("[SHORTEST PATH] %s in self.net", eth.dst)
-#            self.logger.info("[SHORTEST PATH] Topology - nodes: %s", self.net.nodes())
-#            self.logger.info("[SHORTEST PATH] Topology - links: %s", self.net.edges())
-#            path = nx.shortest_path(self.net, eth.src, eth.dst)
-#            self.logger.info("[SHORTEST PATH] shortest path from %s to %s: %s", eth.src, eth.dst, path)
 
         else:
-            self.logger.info("[SHORTEST PATH] packet in dpid=%s (in_port=%s), src=%s, dst=%s", dpid, in_port, src, dst)
+            ###############
+            # SHORTEST PATH
+            ###############
+            self.logger.info("[SHORTEST PATH] packet in dpid=%s (in_port=%s), src=%s, dst=%s, packet=%s", dpid, in_port, src, dst, pkt)
             if self.net.has_node(eth.dst):
-                #self.logger.info("%s in self.net", eth.dst)
+                # Compute the shortest path and install the corresponding flow entries
+                #self.logger.info("[SHORTEST PATH] %s in self.net", eth.dst)
+                #self.logger.info("[SHORTEST PATH] Topology - nodes: %s", self.net.nodes())
+                #self.logger.info("[SHORTEST PATH] Topology - links: %s", self.net.edges())
                 path = nx.shortest_path(self.net, eth.src, eth.dst)
                 self.logger.info("[SHORTEST PATH] Shortest path from src=%s to dst=%s: %s", src, dst, path)
                 next_match = parser.OFPMatch(eth_dst=eth.dst)
@@ -247,30 +263,21 @@ class SimpleSwitch13(app_manager.RyuApp):
                      back_port = self.net[now_switch][back_switch]['port']
                      actions = [parser.OFPActionOutput(next_port)]
                      if msg.buffer_id != ofproto.OFP_NO_BUFFER:
-                         self.add_flow(self.switch_map[now_switch], 1, next_match, actions, msg.buffer_id)
+                         self.add_flow(self.switchMap[now_switch], 1, next_match, actions, msg.buffer_id)
                      else:
-                         self.add_flow(self.switch_map[now_switch], 1, next_match, actions)
+                         self.add_flow(self.switchMap[now_switch], 1, next_match, actions)
                      actions = [parser.OFPActionOutput(next_port)]
                      if msg.buffer_id != ofproto.OFP_NO_BUFFER:
-                         self.add_flow(self.switch_map[now_switch], 1, next_match, actions, msg.buffer_id)
+                         self.add_flow(self.switchMap[now_switch], 1, next_match, actions, msg.buffer_id)
                      else:
-                         self.add_flow(self.switch_map[now_switch], 1, next_match, actions)
+                         self.add_flow(self.switchMap[now_switch], 1, next_match, actions)
 
             else:
+                # If we do not know the switch and port of the destination, flood the message (e.g. for ARP requests)
                 out_port = ofproto.OFPP_FLOOD
-                self.logger.info("[SHORTEST PATH] Send packet in switch %s to all ports (flooding)", dpid)
+                self.logger.info("[SHORTEST PATH] %s not in self.net.nodes (%s), so send packet in switch %s to all ports (flooding)", eth.dst, self.net.nodes(), dpid)
 
                 actions = [parser.OFPActionOutput(out_port)]
-
-                # install a flow to avoid packet_in next time
-                if out_port != ofproto.OFPP_FLOOD:
-                    match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
-                    # verify if we have a valid buffer_id, if yes avoid to send both flow_mod & packet_out
-                    if msg.buffer_id != ofproto.OFP_NO_BUFFER:
-                        self.add_flow(datapath, 1, match, actions, msg.buffer_id)
-                        return
-                    else:
-                        self.add_flow(datapath, 1, match, actions)
                 data = None
                 if msg.buffer_id == ofproto.OFP_NO_BUFFER:
                     data = msg.data

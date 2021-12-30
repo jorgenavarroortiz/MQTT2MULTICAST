@@ -73,6 +73,19 @@ def myNetwork():
 #	net.get('h1').cmd("XXX")    # Example on how to execute a command on a particular host
 #	net.get('h1').waitOutput()
 
+	# Disable IPv6
+	for h in net.hosts:
+		print "disable ipv6"
+		h.cmd("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
+		h.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
+		h.cmd("sysctl -w net.ipv6.conf.lo.disable_ipv6=1")
+
+	for sw in net.switches:
+		print "disable ipv6"
+		sw.cmd("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
+		sw.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
+		sw.cmd("sysctl -w net.ipv6.conf.lo.disable_ipv6=1")
+
 	# Open Mininet Command Line Interface
 	CLI(net)
 
