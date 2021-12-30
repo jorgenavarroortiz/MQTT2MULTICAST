@@ -34,14 +34,17 @@ from datetime import datetime
 import struct, socket
 
 from ryu.topology import event
-# Below is the library used for topo discovery
-# Taken information from https://github.com/Ehsan70/RyuApps/blob/master/TopoDiscoveryInRyu.md
-# Taken information from https://github.com/castroflavio/ryu/blob/master/ryu/app/shortestpath.py
-# Taken information from https://github.com/YanHaoChen/Learning-SDN/blob/master/Controller/Ryu/ShortestPath/shortest_path_with_networkx.py
+# Library and links used for topo discovery
+# Information taken from https://github.com/Ehsan70/RyuApps/blob/master/TopoDiscoveryInRyu.md
+# Information taken from https://github.com/castroflavio/ryu/blob/master/ryu/app/shortestpath.py
+# Information taken from https://github.com/YanHaoChen/Learning-SDN/blob/master/Controller/Ryu/ShortestPath/shortest_path_with_networkx.py
 from ryu.topology.api import get_switch, get_link
 import copy
 import networkx as nx
 import time
+
+# Links for group tables
+# Information taken from https://github.com/knetsolutions/learn-sdn-with-ryu/blob/master/ryu-exercises/ex7_group_tables.py
 
 LEARNING_SWITCH = False # True for learning switch. If False, shortest path will be employed.
 
@@ -70,10 +73,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         # Holds the ARP cache
         self.arpCache = {}
 
-    # Handy function that lists all attributes in the given object
-    def ls(self,obj):
-        print("\n".join([x for x in dir(obj) if x[0] != "_"]))
-
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
         datapath = ev.msg.datapath
@@ -98,21 +97,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, ip_proto=in_proto.IPPROTO_UDP, udp_dst=int(mqtt2multicast.UDP_SERVER_PORT))
         self.add_flow(datapath, 100, match, actions)
 
-    def add_flow(self, datapath, priority, match, actions, buffer_id=None):
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-
-        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,
-                                             actions)]
-        if buffer_id:
-            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
-                                    priority=priority, match=match,
-                                    instructions=inst)
-        else:
-            mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                    match=match, instructions=inst)
-        datapath.send_msg(mod)
-
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
         # If you hit this you might want to increase the "miss_send_length" of your switch
@@ -136,10 +120,9 @@ class SimpleSwitch13(app_manager.RyuApp):
             return
 
 
-        #################################################
-        # Add host/switch to topology if not included yet
-        #################################################
-	# forwarded by shortest path
+        ###################################################
+        ### Add host/switch to topology if not included yet (leveraging ARP messages)
+        ###################################################
         pkt_arp = pkt.get_protocol(arp.arp)
         if pkt_arp:
             if not self.net.has_node(eth.src):
@@ -165,9 +148,9 @@ class SimpleSwitch13(app_manager.RyuApp):
                 self.logger.info("### [TOPOLOGY] ARP cache: %s", self.arpCache)
 
 
-        ################################
-        # Handling UDP packets (over IP)
-        ################################
+        ##################################
+        ### Handling UDP packets (over IP)
+        ##################################
         pkt_ipv4 = pkt.get_protocol(ipv4.ipv4)
         self.logger.info("### pkt_ipv4: %s", pkt_ipv4)
         if pkt_ipv4:
@@ -202,10 +185,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         # The previous handler will exit this function if required. If not, the learning switch has to be executed for the current packet.
 
 
-        ###################
-	### Learning switch
-        ###################
         if LEARNING_SWITCH:
+            ###################
+	    ### Learning switch
+            ###################
             self.mac_to_port.setdefault(dpid, {})
 
             self.logger.info("[LEARNING SWITCH] packet in dpid=%s, src=%s, dst=%s, in_port=%s", dpid, src, dst, in_port)
@@ -239,11 +222,10 @@ class SimpleSwitch13(app_manager.RyuApp):
                                       in_port=in_port, actions=actions, data=data)
             datapath.send_msg(out)
 
-
         else:
-            ###############
-            # SHORTEST PATH
-            ###############
+            #################
+            ### SHORTEST PATH
+            #################
             self.logger.info("[SHORTEST PATH] packet in dpid=%s (in_port=%s), src=%s, dst=%s, packet=%s", dpid, in_port, src, dst, pkt)
             if self.net.has_node(eth.dst):
                 # Compute the shortest path and install the corresponding flow entries
@@ -273,7 +255,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                          self.add_flow(self.switchMap[now_switch], 1, next_match, actions)
 
             else:
-                # If we do not know the switch and port of the destination, flood the message (e.g. for ARP requests)
+                # If we do not know the switch and port of the destination, flood the message (e.g. for ARP requests or other broadcast messages)
                 out_port = ofproto.OFPP_FLOOD
                 self.logger.info("[SHORTEST PATH] %s not in self.net.nodes (%s), so send packet in switch %s to all ports (flooding)", eth.dst, self.net.nodes(), dpid)
 
@@ -287,9 +269,9 @@ class SimpleSwitch13(app_manager.RyuApp):
                 datapath.send_msg(out)
 
 
-    #########################
-    ### MQTT to MULTICAST APP
-    #########################
+    ###################################################################################
+    ### MQTT to MULTICAST related functions
+    ###################################################################################
     def _handle_mqtt2multicast(self, datapath, in_port, data, pkt_ethernet, pkt_ipv4, pkt_udp, pkt_mqtt2multicast):
 
         now = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
@@ -417,6 +399,33 @@ class SimpleSwitch13(app_manager.RyuApp):
 
         return multicastIPAddress
 
+    ###################################################################################
+    ### Auxiliary functions
+    ###################################################################################
+    # Handy function that lists all attributes in the given object
+    def ls(self,obj):
+        print("\n".join([x for x in dir(obj) if x[0] != "_"]))
+
+    ###################################################################################
+    # Functions to add flows
+    ###################################################################################
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None):
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,
+                                             actions)]
+        if buffer_id:
+            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
+                                    priority=priority, match=match,
+                                    instructions=inst)
+        else:
+            mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
+                                    match=match, instructions=inst)
+        datapath.send_msg(mod)
+
+    ###################################################################################
+    # Functions about topology
     ###################################################################################
     """
     The event EventSwitchEnter will trigger the activation of get_topology_data().
