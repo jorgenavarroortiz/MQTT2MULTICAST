@@ -59,10 +59,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.mac_addr = '11:22:33:44:55:66'
         self.ip_addr  = '192.168.1.100'
         self.topicToMulticast = {}
-        self.multicastTransmitterForTopic = {}
-        self.multicastTransmitterForTopicLastTimeSeen = {}
-        self.multicastTransmitterTimeout = 3600 # If an MQTT publisher is not seen after this time, it should be removed from self.multicastTransmitterForTopic.
-        self.multicastReceiverForTopic = {}
+        self.multicastTransmittersForTopic = {}
+        self.multicastTransmittersForTopicLastTimeSeen = {}
+        self.multicastTransmitterTimeout = 3600 # If an MQTT publisher is not seen after this time, it should be removed from self.multicastTransmittersForTopic.
+        self.multicastReceiversForTopic = {}
         self.firstMulticastIPAddress = '225.0.0.0'
 
         # Holds the topology data and structure
@@ -72,6 +72,9 @@ class SimpleSwitch13(app_manager.RyuApp):
 
         # Holds the ARP cache
         self.arpCache = {}
+
+        # Testing group table rules...
+        self.flowNo = 1
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -160,6 +163,7 @@ class SimpleSwitch13(app_manager.RyuApp):
 
                 self.logger.info("### pkt_udp: %s, pkt_ipv4.dst: %s, dst_port: %d", pkt_udp, pkt_ipv4.dst, pkt_udp.dst_port)
 
+                # MQTT2MULTICAST messages
                 if pkt_udp and pkt_ipv4.dst == self.ip_addr:
                     if pkt_udp.dst_port == mqtt2multicast.UDP_SERVER_PORT:
 
@@ -181,13 +185,15 @@ class SimpleSwitch13(app_manager.RyuApp):
                             # Packets sent to the controller should not continue through the SDN network
                             return
 
+                # MQTT messages sent to a multicast address
+
 
         # The previous handler will exit this function if required. If not, the learning switch has to be executed for the current packet.
 
 
         if LEARNING_SWITCH:
             ###################
-	    ### Learning switch
+	    ### LEARNING SWITCH
             ###################
             self.mac_to_port.setdefault(dpid, {})
 
@@ -243,16 +249,37 @@ class SimpleSwitch13(app_manager.RyuApp):
                      back_switch = path[on_path_switch-1]
                      next_port = self.net[now_switch][next_switch]['port']
                      back_port = self.net[now_switch][back_switch]['port']
+
                      actions = [parser.OFPActionOutput(next_port)]
                      if msg.buffer_id != ofproto.OFP_NO_BUFFER:
                          self.add_flow(self.switchMap[now_switch], 1, next_match, actions, msg.buffer_id)
                      else:
                          self.add_flow(self.switchMap[now_switch], 1, next_match, actions)
-                     actions = [parser.OFPActionOutput(next_port)]
+
+                     actions = [parser.OFPActionOutput(back_port)]
                      if msg.buffer_id != ofproto.OFP_NO_BUFFER:
-                         self.add_flow(self.switchMap[now_switch], 1, next_match, actions, msg.buffer_id)
+                         self.add_flow(self.switchMap[now_switch], 1, back_match, actions, msg.buffer_id)
                      else:
-                         self.add_flow(self.switchMap[now_switch], 1, next_match, actions)
+                         self.add_flow(self.switchMap[now_switch], 1, back_match, actions)
+
+                     """
+                     # TESTING GROUP TABLES... IT WORKS OK, COMMENTING THE PREVIOUS self.add_flow() AND RELATED INSTRUCTIONS, AND UNCOMMENTING THE FOLLOWING ONES
+                     groupTableID = self.flowNo
+                     self.flowNo = self.flowNo + 1
+                     portList = [next_port]
+                     self.send_group_mod(self.switchMap[now_switch], portList, groupTableID)
+                     actions = [parser.OFPActionGroup(group_id=groupTableID)]
+                     match = next_match
+                     self.add_flow(datapath, 1, match, actions)
+
+                     groupTableID = self.flowNo
+                     self.flowNo = self.flowNo + 1
+                     portList = [back_port]
+                     self.send_group_mod(self.switchMap[now_switch], portList, groupTableID)
+                     actions = [parser.OFPActionGroup(group_id=groupTableID)]
+                     match = back_match
+                     self.add_flow(datapath, 1, match, actions)
+                     """
 
             else:
                 # If we do not know the switch and port of the destination, flood the message (e.g. for ARP requests or other broadcast messages)
@@ -285,9 +312,9 @@ class SimpleSwitch13(app_manager.RyuApp):
             topic = pkt_mqtt2multicast.mqtt2multicastTopic
             flags = pkt_mqtt2multicast.mqtt2multicastFlags
 
-            if topic in self.topicToMulticast:
+            if topic.decode() in self.topicToMulticast:
                 # Topic already exists
-                multicastIPAddress = self.topicToMulticast[topic]
+                multicastIPAddress = self.topicToMulticast[topic.decode()]
                 self.logger.info("### %s > MQTT2MULTICAST - multicast IP address already assigned to existing topic ('%s'): %s", now, topic.decode(), multicastIPAddress)
 
             else:
@@ -296,44 +323,49 @@ class SimpleSwitch13(app_manager.RyuApp):
 
                 multicastIPAddress = self._get_nth_multicast_ip_address(numberOfTopics) # The first multicast IP address has index=0
                 self.logger.info("### %s > MQTT2MULTICAST - multicast IP address assigned to new topic ('%s'): %s", now, topic.decode(), multicastIPAddress)
-                self.topicToMulticast[topic] = multicastIPAddress
+                self.topicToMulticast[topic.decode()] = multicastIPAddress
 
             if flags == 0:
                 # The sender is going to publish to this multicast IP address
                 self.logger.info("### %s > MQTT2MULTICAST - %s will publish to the multicast IP address %s", now, pkt_ipv4.src, multicastIPAddress)
-                if topic.decode() in self.multicastTransmitterForTopic:
-                    multicastTransmitterForThisTopic = self.multicastTransmitterForTopic[topic.decode()]
-                    multicastTransmitterForThisTopic.append(pkt_ipv4.src)
+                if topic.decode() in self.multicastTransmittersForTopic:
+                    multicastTransmittersForThisTopic = self.multicastTransmittersForTopic[topic.decode()]
+                    multicastTransmittersForThisTopic.append(pkt_ipv4.src)
                 else:
-                    self.multicastTransmitterForTopic[topic.decode()] = [pkt_ipv4.src]
-                self.multicastTransmitterForTopicLastTimeSeen[pkt_ipv4.src + ' - ' + topic.decode()] = now
-                self.logger.info("### %s > MQTT2MULTICAST - multicast transmitters for topic %s: %s", now, topic.decode(), self.multicastTransmitterForTopic[topic.decode()])
+                    self.multicastTransmittersForTopic[topic.decode()] = [pkt_ipv4.src]
+                self.multicastTransmittersForTopicLastTimeSeen[pkt_ipv4.src + ' - ' + topic.decode()] = now
+                self.logger.info("### %s > MQTT2MULTICAST - multicast transmitters for topic %s: %s", now, topic.decode(), self.multicastTransmittersForTopic[topic.decode()])
+
+                self.updateMulticastRoutingTree(topic)
 
             elif flags == 1:
                 # The sender subscribes to this multicast IP address
                 self.logger.info("### %s > MQTT2MULTICAST - subscribe %s to the multicast IP address %s", now, pkt_ipv4.src, multicastIPAddress)
-                if topic.decode() in self.multicastReceiverForTopic:
-                    multicastReceiverForThisTopic = self.multicastReceiverForTopic[topic.decode()]
-                    multicastReceiverForThisTopic.append(pkt_ipv4.src)
+                if topic.decode() in self.multicastReceiversForTopic:
+                    multicastReceiversForThisTopic = self.multicastReceiversForTopic[topic.decode()]
+                    multicastReceiversForThisTopic.append(pkt_ipv4.src)
                 else:
-                    self.multicastReceiverForTopic[topic.decode()] = [pkt_ipv4.src]
-                self.logger.info("### %s > MQTT2MULTICAST - multicast receivers for topic %s: %s", now, topic.decode(), self.multicastReceiverForTopic[topic.decode()])
+                    self.multicastReceiversForTopic[topic.decode()] = [pkt_ipv4.src]
+                self.logger.info("### %s > MQTT2MULTICAST - multicast receivers for topic %s: %s", now, topic.decode(), self.multicastReceiversForTopic[topic.decode()])
+
+                self.updateMulticastRoutingTree(topic)
 
             elif flags == 2:
                 # The sender unsubscribes to this multicast IP address
                 self.logger.info("### %s > MQTT2MULTICAST - unsubscribe %s from the multicast IP address %s (topic: %s)", now, pkt_ipv4.src, multicastIPAddress, topic.decode())
-                #for topic in self.multicastReceiverForTopic.copy():
-                multicastReceiverList = self.multicastReceiverForTopic[topic.decode()]
-                multicastReceiverList = [x for x in multicastReceiverList if not(x == pkt_ipv4.src)] # Removing based on the content of the first element. 
-                                                                                                     # Maybe list comprehension is not the best for performance, but it works...
-                self.multicastReceiverForTopic[topic.decode()] = multicastReceiverList               # Required since subscribersList is now a different object
+                #for topic in self.multicastReceiversForTopic.copy():
+                multicastReceiversForThisTopic = self.multicastReceiverForsTopic[topic.decode()]
+                multicastReceiversForThisTopic = [x for x in multicastReceiversForThisTopic if not(x == pkt_ipv4.src)] # Removing based on the content of the first element. 
+                                                                                                                       # Maybe list comprehension is not the best for performance, but it works...
+                self.multicastReceiversForTopic[topic.decode()] = multicastReceiversForThisTopic                       # Required since subscribersList is now a different object
                 # If this key has no content, remove it from the dictionary
-                if not self.multicastReceiverForTopic[topic.decode()]:
-                    del self.multicastReceiverForTopic[topic.decode()]
+                if not self.multicastReceiversForTopic[topic.decode()]:
+                    del self.multicastReceiversForTopic[topic.decode()]
                     self.logger.info("### %s > MQTT2MULTICAST - no multicast receivers for topic %s", now, topic.decode())
                 else:
-                    self.logger.info("### %s > MQTT2MULTICAST - multicast receivers for topic %s: %s", now, topic.decode(), self.multicastReceiverForTopic[topic.decode()])
+                    self.logger.info("### %s > MQTT2MULTICAST - multicast receivers for topic %s: %s", now, topic.decode(), self.multicastReceiverForsTopic[topic.decode()])
 
+                self.updateMulticastRoutingTree(topic)
 
             # Create a new packet MQTT2MULTICAST REPLY to be sent
             if flags == 0 or flags == 1:
@@ -400,6 +432,45 @@ class SimpleSwitch13(app_manager.RyuApp):
         return multicastIPAddress
 
     ###################################################################################
+    ### MULTICAST related functions
+    ###################################################################################
+    def updateMulticastRoutingTree (self, topic):
+        print("*** TO BE DONE ***")
+        multicastIPAddress = None
+        multicastTransmittersForThisTopic = None
+        multicastReceiversForThisTopic = None
+
+        if topic.decode() in self.topicToMulticast:
+            multicastIPAddress = self.topicToMulticast[topic.decode()]
+        if topic.decode() in self.multicastTransmittersForTopic:
+            multicastTransmittersForThisTopic = self.multicastTransmittersForTopic[topic.decode()]
+        if topic.decode() in self.multicastReceiversForTopic:
+            multicastReceiversForThisTopic = self.multicastReceiversForTopic[topic.decode()]
+
+        if (multicastIPAddress and multicastTransmittersForThisTopic and multicastReceiversForThisTopic):
+            self.logger.info("### %s > MQTT2MULTICAST - update multicast routing tree")
+            self.logger.info("##### Multicast IP address: %s", multicastIPAddress)
+            self.logger.info("##### Multicast transmitters: %s", multicastTransmittersForThisTopic)
+            self.logger.info("##### Multicast receivers: %s", multicastReceiversForThisTopic)
+
+            # *** UPDATE HERE THE GROUP TABLES ***
+
+        else:
+            self.logger.info("### %s > MQTT2MULTICAST - multicast routing tree not updated, some information missing!!!")
+            if multicastIPAddress:
+                self.logger.info("##### Multicast IP address: %s", multicastIPAddress)
+            else:
+                self.logger.info("##### No multicast IP address!!!")
+            if multicastTransmittersForThisTopic:
+                self.logger.info("##### Multicast transmitters: %s", multicastTransmittersForThisTopic)
+            else:
+                self.logger.info("##### No multicast transmitters!!!")
+            if multicastReceiversForThisTopic:
+                self.logger.info("##### Multicast receivers: %s", multicastReceiversForThisTopic)
+            else:
+                self.logger.info("##### No multicast receivers!!!")
+
+    ###################################################################################
     ### Auxiliary functions
     ###################################################################################
     # Handy function that lists all attributes in the given object
@@ -407,7 +478,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         print("\n".join([x for x in dir(obj) if x[0] != "_"]))
 
     ###################################################################################
-    # Functions to add flows
+    # Functions related to add flows
     ###################################################################################
     def add_flow(self, datapath, priority, match, actions, buffer_id=None):
         ofproto = datapath.ofproto
@@ -423,6 +494,24 @@ class SimpleSwitch13(app_manager.RyuApp):
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
                                     match=match, instructions=inst)
         datapath.send_msg(mod)
+
+
+    ###################################################################################
+    # Functions related to group tables
+    ###################################################################################
+    def send_group_mod(self, datapath, portList, groupTableID):
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        buckets = []
+        for port in portList:
+           action = [parser.OFPActionOutput(port)]
+           buckets.append(parser.OFPBucket(actions=action))
+
+        req = parser.OFPGroupMod(datapath, ofproto.OFPGC_ADD,
+                                 ofproto.OFPGT_ALL, groupTableID, buckets)
+        datapath.send_msg(req)
+
 
     ###################################################################################
     # Functions about topology
