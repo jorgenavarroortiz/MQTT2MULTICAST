@@ -59,6 +59,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.mac_addr = '11:22:33:44:55:66'
         self.ip_addr  = '192.168.1.100'
         self.topicToMulticast = {}
+        self.noTopic = {}
         self.multicastTransmittersForTopic = {}
         self.multicastTransmittersForTopicLastTimeSeen = {}
         self.multicastTransmitterTimeout = 3600 # If an MQTT publisher is not seen after this time, it should be removed from self.multicastTransmittersForTopic.
@@ -74,7 +75,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.arpCache = {}
 
         # Testing group table rules...
-        self.flowNo = 1
+#        self.flowNo = 1
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -139,12 +140,12 @@ class SimpleSwitch13(app_manager.RyuApp):
                 #self.logger.info("### [TOPOLOGY] pkt_arp: %s", pkt_arp)
                 if pkt_arp.opcode == 1:
                     # ARP REQUEST
-                    self.arpCache.update({pkt_arp.src_mac: pkt_arp.src_ip})
+                    self.arpCache.update({pkt_arp.src_ip: pkt_arp.src_mac})
                     #pkt_arp: arp(dst_ip='192.168.1.102',dst_mac='00:00:00:00:00:00',hlen=6,hwtype=1,opcode=1,plen=4,proto=2048,src_ip='192.168.1.101',src_mac='00:00:00:00:00:01')
                     self.logger.info("### [TOPOLOGY] ARP request (src_mac=%s, src_ip=%s, dst_ip=%s)", pkt_arp.src_mac, pkt_arp.src_ip, pkt_arp.dst_ip)
                 elif pkt_arp.opcode == 2:
                     # ARP REPLY
-                    self.arpCache.update({pkt_arp.src_mac: pkt_arp.src_ip})
+                    self.arpCache.update({pkt_arp.src_ip: pkt_arp.src_mac})
                     #arp(dst_ip='192.168.1.101',dst_mac='00:00:00:00:00:01',hlen=6,hwtype=1,opcode=2,plen=4,proto=2048,src_ip='192.168.1.102',src_mac='00:00:00:00:00:02')
                     self.logger.info("### [TOPOLOGY] ARP reply (src_mac=%s, src_ip=%s, dst_mac=%s, dst_ip=%s)", pkt_arp.src_mac, pkt_arp.src_ip, pkt_arp.dst_mac, pkt_arp.dst_ip)
 
@@ -324,6 +325,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 multicastIPAddress = self._get_nth_multicast_ip_address(numberOfTopics) # The first multicast IP address has index=0
                 self.logger.info("### %s > MQTT2MULTICAST - multicast IP address assigned to new topic ('%s'): %s", now, topic.decode(), multicastIPAddress)
                 self.topicToMulticast[topic.decode()] = multicastIPAddress
+                self.noTopic[topic.decode()] = numberOfTopics + 1 # Start from 1
 
             if flags == 0:
                 # The sender is going to publish to this multicast IP address
@@ -435,7 +437,9 @@ class SimpleSwitch13(app_manager.RyuApp):
     ### MULTICAST related functions
     ###################################################################################
     def updateMulticastRoutingTree (self, topic):
-        print("*** TO BE DONE ***")
+        now = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
+
+        # Get information for this topic / multicast IP address
         multicastIPAddress = None
         multicastTransmittersForThisTopic = None
         multicastReceiversForThisTopic = None
@@ -447,13 +451,68 @@ class SimpleSwitch13(app_manager.RyuApp):
         if topic.decode() in self.multicastReceiversForTopic:
             multicastReceiversForThisTopic = self.multicastReceiversForTopic[topic.decode()]
 
+        # If there are transmitters and receivers, let us update the multicast routing tree (using shortest paths from sources=transmitters to destinations=receivers)
         if (multicastIPAddress and multicastTransmittersForThisTopic and multicastReceiversForThisTopic):
-            self.logger.info("### %s > MQTT2MULTICAST - update multicast routing tree")
+            self.logger.info("### %s > MQTT2MULTICAST - update multicast routing tree", now)
             self.logger.info("##### Multicast IP address: %s", multicastIPAddress)
             self.logger.info("##### Multicast transmitters: %s", multicastTransmittersForThisTopic)
             self.logger.info("##### Multicast receivers: %s", multicastReceiversForThisTopic)
 
-            # *** UPDATE HERE THE GROUP TABLES ***
+            # Get shortest paths (from transmitters to receivers)
+            shortestPathsList = []
+            for transmitter in multicastTransmittersForThisTopic:
+                for receiver in multicastReceiversForThisTopic:
+                    transmitterMac = None
+                    receiverMac = None
+
+                    if transmitter in self.arpCache: 
+                        transmitterMac = self.arpCache[transmitter]
+                    if receiver in self.arpCache:
+                        receiverMac = self.arpCache[receiver]
+
+                    if transmitterMac and receiverMac:
+                        shortestPath = nx.shortest_path(self.net, transmitterMac, receiverMac)
+                        self.logger.info("####### Multicast path (IP address: %s) between %s and %s: %s", multicastIPAddress, transmitter, receiver, shortestPath)
+                        shortestPathsList.append(shortestPath)
+            self.logger.info("######### All multicast paths (IP address: %s): %s", multicastIPAddress, shortestPathsList)
+
+            # Update group tables for multicasting this specific IP address associated to this specific topic
+            noTopic = self.noTopic[topic.decode()] # noTopic will be used as groupTableID
+
+                # portsForEachSwitch is a dictionary of dictionaries. Each dictionary element represents the links to be included per switch, which are also stored in a dictionary.
+                # This way we avoid repeated links (dictionaries do not allow repeated elements).
+            portsForEachSwitch = {}
+            for path in shortestPathsList:
+                for on_path_switch in range(1, len(path)-1):
+                    current_switch = path[on_path_switch]
+                    portsForEachSwitch[current_switch] = {}
+
+                # Fill portsForEachSwitch. Add all the ports in each switch that will forward a multicast packet for this packet.
+            for path in shortestPathsList:
+                for on_path_switch in range(1, len(path)-1):
+                    current_switch = path[on_path_switch]
+                    next_switch = path[on_path_switch+1]
+                    next_port = self.net[current_switch][next_switch]['port']
+                    portsForEachSwitch[current_switch][next_port] = 1
+
+            for switch in portsForEachSwitch:
+                # Make a list of ports in each switch, so we can create/update the corresponding group table in the switch.
+                portList = []
+                for port in portsForEachSwitch[switch]:
+                    self.logger.info("### Multicast tree for IP address %s (groupTableID %d), add switch %s port %s", multicastIPAddress, noTopic, switch, port)
+                    portList.append(port)
+
+                # Create/update a group table entry and add a flow table entry pointing to that group table entry
+                groupTableID = noTopic
+                self.logger.info("### Multicast tree for IP address %s (groupTableID %d), switch %s with ports %s", multicastIPAddress, noTopic, switch, portList)
+
+                datapath = self.switchMap[switch]
+                parser = datapath.ofproto_parser
+                priority = 100
+                match = parser.OFPMatch(eth_type=0x800, ipv4_dst=multicastIPAddress)
+                self.send_group_mod(datapath, portList, groupTableID)
+                actions = [parser.OFPActionGroup(group_id=groupTableID)]
+                self.add_flow(datapath, priority, match, actions)
 
         else:
             self.logger.info("### %s > MQTT2MULTICAST - multicast routing tree not updated, some information missing!!!")
