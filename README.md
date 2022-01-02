@@ -19,9 +19,9 @@ The forwarders may use UDP or multicast:
 - When using UDP, the MQTT proxy will send an `MQTT SUBSCRIBE` message to the other proxies as soon as the first MQTT client subscribes to a new topic. When the last of the subscribers for that topic is disconnected, an `MQTT UNSUBSCRIBE` message is sent to the other proxies. `MQTT PUBLISH` messages are forwarded only to other proxies that have at least one subscriber for that specific topic (not forwarded otherwise).
 - When using multicast, the forwarders will ask the MQTT2MULTICAST server which multicast IP address (starting e.g. from 225.0.0.0) is assigned to this specific topic using an `MQTT2MULTICAST REQUEST` message. The MQTT2MULTICAST server will assign multicast IP addresses to topics by following the order of the requests, and will respond with an `MQTT2MULTICAST REPLY` message. The MQTT2MULTICAST server will store the IP addresses of the MQTT proxies that are subscribed to specific topics, so this may be used to create a multicast tree for routing the multicast messages based on their destination multicast IP address. 
 
-**MULTICAST ROUTING based on this information is to be implemented**
+**MULTICAST ROUTING** based on this information is also implemented
 
-In order to implement multicast routing, the RYU application `simple_switch_13_MQTT2MULTICAST.py` has the following variables: `multicastReceiverForTopic`, which includes a list of subscribers (IP addresses) for a specific topic, and `topicToMulticast`, which translates between the topic space and the multicast IP addresses space. Thus, with both variables, we should be able to generate, on the RYU application, the corresponding flow rules for the switches to transmit the multicast messages to their corresponding receivers (i.e. create a multicast tree for each topic/multicast IP address).
+In order to implement multicast routing, the RYU application `simple_switch_13_MQTT2MULTICAST.py` has the following variables: `multicastReceiverForTopic`, which includes a list of subscribers (IP addresses) for a specific topic, `multicastTransmittersForTopic`, which includes a list of publishers (IP addresses) for a specific topic,  and `topicToMulticast`, which translates between the topic space and the multicast IP addresses space. Thus, with these variables, we generate, on the RYU application, the corresponding group table and flow rules for the switches to transmit the multicast messages to their corresponding receivers, i.e. create a multicast tree for each pair of topic/multicast IP address and transmitter. These multicast trees have been computed using the shortest paths (Dijkstra's algorithm, implemented in the `networkx` library).
 
 **MQTT2MULTICAST protocol**
 
@@ -36,9 +36,11 @@ The `packet type` can be 1 (`MQTT2MULTICAST REQUEST`) or 2 (`MQTT2MULTICAST REPL
 
 - Please make sure that you **use Scapy 2.4.4** (``pip install scapy==2.4.4``). The ``sniff()`` function does not work with a list of network interfaces in version 2.4.5. Tested with ``mosquitto_sub`` and ``mosquitto_pub`` tools (see the examples below).
 
+- Please make sure that you have installed the `networkx` package (Python package for the creation, manipulation, and study of the structure, dynamics, and functions of complex networks). You can execute `python3 -m pip install networkx` for that purpose.
+
 - IPv6 has been disabled in hosts and switches to avoid too many messages in RYU's log.
 
-- You can select `learning switch` or `shortest path` for L2 routing in the script `~/RYU/ryu/app/simple_switch_13_MQTT2MULTICAST.py`. Please change the line `LEARNING_SWITCH = True` accordingly.
+- You can select `learning switch` or `shortest path` for L2 routing in the script `~/RYU/ryu/app/simple_switch_13_MQTT2MULTICAST.py`. Please set the variable `LEARNING_SWITCH` to `True` (learning switch) or `False` (shortest path), accordingly.
 
 - To avoid the kernel resetting the TCP connection (since there is no socket open from the kernel's point of view), we have to avoid sending TCP RESET packets to the publisher/subscriber using e.g. ``iptables``. Similarly to avoid ICMP destination unreachable because there is no application receiving the UDP packets. In order to simplify this (and to include the arguments required for the Python script), we have created Bash scripts (``mqtt_proxyX.sh``).
 
@@ -106,6 +108,8 @@ The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward
 
 In this example, `MQTT PUBLISH` messages will be forwarded using multicast IP addresses between any MQTT proxy connected to the SDN network with at least one subscriber subscribed to that topic.
 
+Based on the `MQTT2MULTICAST request` messages (which can be differentiated for publishers and subscribers, based on the `flags` field), the RYU app creates source-based multicast routing trees using the shortest paths. **NOTE**: If you want to use an existing multicast routing protocol, you will have to implement IGMP (instead of using the `MQTT2MULTICAST request` messages) and disable the current shortest path strategy (by setting the `MULTICAST_ROUTING` variable to `False`).
+
 This experiment uses `mininet` with a tree topology with a 3 switches (one root, `s1`, and two leaves, `s2` and `s3`) which connect two hosts to each leaf (`h1` and `h2` to `s2` and `h3` and `h4` to `s3`). `h1` and `h4` will act as MQTT proxies. `h2` will be an MQTT subscriber, subscribed to topic `topic1`, whereas `h3` will be an MQTT publisher, which will publish a message on that topic.
 
 Steps to execute the experiment:
@@ -155,7 +159,4 @@ The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward
 
 ## Experiment using multicast with Shortest Path First routing to forward MQTT messages within the SDN network
 
-We will employ the `networkx` package (Python package for the creation, manipulation, and study of the structure, dynamics, and functions of complex networks):
-```
-python3 -m pip install networkx
-```
+
