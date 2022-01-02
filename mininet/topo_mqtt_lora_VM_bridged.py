@@ -225,10 +225,7 @@ def main():
 		usage()
 		sys.exit(2)
 
-	f = 0
-	r = 0
-	R = 0
-
+	f, r, R = 0, 0, 0
 	for o, a in opts:
 		if o == "-v":
 			verbose = True
