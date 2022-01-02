@@ -40,7 +40,7 @@ The `packet type` can be 1 (`MQTT2MULTICAST REQUEST`) or 2 (`MQTT2MULTICAST REPL
 
 - IPv6 has been disabled in hosts and switches to avoid too many messages in RYU's log.
 
-- You can select `learning switch` or `shortest path` for L2 routing in the script `~/RYU/ryu/app/simple_switch_13_MQTT2MULTICAST.py`. Please change the line `LEARNING_SWITCH = True` accordingly.
+- You can select `learning switch` or `shortest path` for L2 routing in the script `~/RYU/ryu/app/simple_switch_13_MQTT2MULTICAST.py`. Please set the variable `LEARNING_SWITCH` to `True` (learning switch) or `False` (shortest path), accordingly.
 
 - To avoid the kernel resetting the TCP connection (since there is no socket open from the kernel's point of view), we have to avoid sending TCP RESET packets to the publisher/subscriber using e.g. ``iptables``. Similarly to avoid ICMP destination unreachable because there is no application receiving the UDP packets. In order to simplify this (and to include the arguments required for the Python script), we have created Bash scripts (``mqtt_proxyX.sh``).
 
@@ -107,6 +107,8 @@ The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward
 ## Experiment using multicast to forward MQTT messages within the SDN network
 
 In this example, `MQTT PUBLISH` messages will be forwarded using multicast IP addresses between any MQTT proxy connected to the SDN network with at least one subscriber subscribed to that topic.
+
+Based on the `MQTT2MULTICAST request` messages (which can be differentiated for publishers and subscribers, based on the `flags` field), the RYU app creates source-based multicast routing trees using the shortest paths. **NOTE**: If you want to use an existing multicast routing protocol, you will have to implement IGMP (instead of using the `MQTT2MULTICAST request` messages) and disable the current shortest path strategy (by setting the `MULTICAST_ROUTING` variable to `False`).
 
 This experiment uses `mininet` with a tree topology with a 3 switches (one root, `s1`, and two leaves, `s2` and `s3`) which connect two hosts to each leaf (`h1` and `h2` to `s2` and `h3` and `h4` to `s3`). `h1` and `h4` will act as MQTT proxies. `h2` will be an MQTT subscriber, subscribed to topic `topic1`, whereas `h3` will be an MQTT publisher, which will publish a message on that topic.
 
