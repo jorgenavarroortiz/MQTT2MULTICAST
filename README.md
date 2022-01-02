@@ -105,6 +105,8 @@ The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward
 
 ![image](https://user-images.githubusercontent.com/17797704/147362234-07a4e7ab-5b6c-417c-a49c-2e8a3ebd6a18.png)
 
+The following log file includes the messages from the RYU application: [ryu.log](https://github.com/jorgenavarroortiz/MQTT2MULTICAST/files/7799569/ryu.log)
+
 ## Experiment using multicast to forward MQTT messages within the SDN network
 
 In this example, `MQTT PUBLISH` messages will be forwarded using multicast IP addresses between any MQTT proxy connected to the SDN network with at least one subscriber subscribed to that topic.
