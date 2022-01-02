@@ -74,9 +74,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         # Holds the ARP cache
         self.arpCache = {}
 
-        # Testing group table rules...
-#        self.flowNo = 1
-
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
         datapath = ev.msg.datapath
