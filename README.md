@@ -21,7 +21,7 @@ The forwarders may use UDP or multicast:
 
 **MULTICAST ROUTING** based on this information is also implemented
 
-In order to implement multicast routing, the RYU application `simple_switch_13_MQTT2MULTICAST.py` has the following variables: `multicastReceiverForTopic`, which includes a list of subscribers (IP addresses) for a specific topic, and `topicToMulticast`, which translates between the topic space and the multicast IP addresses space. Thus, with both variables, we should be able to generate, on the RYU application, the corresponding flow rules for the switches to transmit the multicast messages to their corresponding receivers (i.e. create a multicast tree for each topic/multicast IP address).
+In order to implement multicast routing, the RYU application `simple_switch_13_MQTT2MULTICAST.py` has the following variables: `multicastReceiverForTopic`, which includes a list of subscribers (IP addresses) for a specific topic, `multicastTransmittersForTopic`, which includes a list of publishers (IP addresses) for a specific topic,  and `topicToMulticast`, which translates between the topic space and the multicast IP addresses space. Thus, with these variables, we generate, on the RYU application, the corresponding group table and flow rules for the switches to transmit the multicast messages to their corresponding receivers, i.e. create a multicast tree for each pair of topic/multicast IP address and transmitter. These multicast trees have been computed using the shortest paths (Dijkstra's algorithm, implemented in the `networkx` library).
 
 **MQTT2MULTICAST protocol**
 
@@ -35,6 +35,8 @@ The `packet type` can be 1 (`MQTT2MULTICAST REQUEST`) or 2 (`MQTT2MULTICAST REPL
 **Other implementation details**
 
 - Please make sure that you **use Scapy 2.4.4** (``pip install scapy==2.4.4``). The ``sniff()`` function does not work with a list of network interfaces in version 2.4.5. Tested with ``mosquitto_sub`` and ``mosquitto_pub`` tools (see the examples below).
+
+- Please make sure that you have installed the `networkx` package (Python package for the creation, manipulation, and study of the structure, dynamics, and functions of complex networks). You can execute `python3 -m pip install networkx` for that purpose.
 
 - IPv6 has been disabled in hosts and switches to avoid too many messages in RYU's log.
 
