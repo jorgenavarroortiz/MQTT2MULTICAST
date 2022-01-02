@@ -44,8 +44,8 @@ The `packet type` can be 1 (`MQTT2MULTICAST REQUEST`) or 2 (`MQTT2MULTICAST REPL
 
 - If no UDP forwarders are configured nor MQTT2MULTICAST server is configured, the program will act as a simple MQTT broker supporting QoS=0.
 
-- The `topo_mqtt_lora_VM_bridged.py` script:
-  - can create a tree topology specifying the fanout of the switches on each level (please check the syntax with `-h`)
+- The `topo_mqtt_lora_VM_bridged.py` script in the `~/MQTT2MULTICAST/mininet` directory:
+  - creates a tree topology specifying the fanout of the switches on each level (e.g. with `-f 2 -f 2`, please check the syntax with `-h`)
   - allows to add delay in the links between switches (e.g. with `-D 10ms`) and in the links between switches and hosts (e.g. with `-d 20ms`)
   - allows connecting a real network interface to a specific host (e.g. with `-r enp0s8 -R h1`)
 
