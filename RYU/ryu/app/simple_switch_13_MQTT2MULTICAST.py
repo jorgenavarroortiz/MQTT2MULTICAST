@@ -59,11 +59,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         # "Virtual" MAC and IP addresses of the SDN-based application at the SDN controller
         self.mac_addr = '11:22:33:44:55:66'
         self.ip_addr  = '192.168.1.100'
+        self.idle_timeout = 3600
         self.topicToMulticast = {}
         self.noTopic = {}
         self.multicastTransmittersForTopic = {}
-        self.multicastTransmittersForTopicLastTimeSeen = {}
-        self.multicastTransmitterTimeout = 3600 # If an MQTT publisher is not seen after this time, it should be removed from self.multicastTransmittersForTopic.
         self.multicastReceiversForTopic = {}
         self.firstMulticastIPAddress = '225.0.0.0'
 
@@ -264,25 +263,6 @@ class SimpleSwitch13(app_manager.RyuApp):
                      else:
                          self.add_flow(self.switchMap[now_switch], 1, back_match, actions)
 
-                     """
-                     # TESTING GROUP TABLES... IT WORKS OK, COMMENTING THE PREVIOUS self.add_flow() AND RELATED INSTRUCTIONS, AND UNCOMMENTING THE FOLLOWING ONES
-                     groupTableID = self.flowNo
-                     self.flowNo = self.flowNo + 1
-                     portList = [next_port]
-                     self.send_group_mod(self.switchMap[now_switch], portList, groupTableID)
-                     actions = [parser.OFPActionGroup(group_id=groupTableID)]
-                     match = next_match
-                     self.add_flow(datapath, 1, match, actions)
-
-                     groupTableID = self.flowNo
-                     self.flowNo = self.flowNo + 1
-                     portList = [back_port]
-                     self.send_group_mod(self.switchMap[now_switch], portList, groupTableID)
-                     actions = [parser.OFPActionGroup(group_id=groupTableID)]
-                     match = back_match
-                     self.add_flow(datapath, 1, match, actions)
-                     """
-
             else:
                 # If we do not know the switch and port of the destination, flood the message (e.g. for ARP requests or other broadcast messages)
                 out_port = ofproto.OFPP_FLOOD
@@ -336,7 +316,6 @@ class SimpleSwitch13(app_manager.RyuApp):
                     multicastTransmittersForThisTopic.append(pkt_ipv4.src)
                 else:
                     self.multicastTransmittersForTopic[topic.decode()] = [pkt_ipv4.src]
-                self.multicastTransmittersForTopicLastTimeSeen[pkt_ipv4.src + ' - ' + topic.decode()] = now
                 self.logger.info("### %s > MQTT2MULTICAST - multicast transmitters for topic %s: %s", now, topic.decode(), self.multicastTransmittersForTopic[topic.decode()])
 
                 if MULTICAST_ROUTING:
@@ -552,10 +531,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
                                     priority=priority, match=match,
-                                    instructions=inst)
+                                    instructions=inst, idle_timeout=self.idle_timeout)
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                    match=match, instructions=inst)
+                                    match=match, instructions=inst, idle_timeout=self.idle_timeout)
         datapath.send_msg(mod)
 
 
