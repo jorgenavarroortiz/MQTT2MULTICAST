@@ -75,6 +75,7 @@ python3 ./bin/ryu-manager --verbose ryu/app/simple_switch_13_MQTT2MULTICAST.py 2
 cd ~/MQTT2MULTICAST
 sudo python ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
 ```
+- Make sure that there is connectivity between all the hosts by executing `pingall`.
 - Open a terminal on `h1` (`xterm h1`, IP address 192.168.1.101) to execute the first MQTT proxy, which is configured to forward MQTT traffic to `h4` (IP address 192.168.1.104):
 ```
 cd ~/MQTT2MULTICAST/SCAPY
@@ -89,7 +90,7 @@ cd ~/MQTT2MULTICAST/SCAPY
 Test that MQTT messages are being forwarded:
 - Execute a subscriber on `h2`:
 ```
-mosquitto_sub -h 192.168.1.101 -t "topic1" -u "jorge" -P "pasaswd"
+mosquitto_sub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd"
 ```
 - Execute a publisher on `h3`:
 ```
@@ -128,6 +129,7 @@ python3 ./bin/ryu-manager --observe-links --verbose ryu/app/simple_switch_13_MQT
 cd ~/MQTT2MULTICAST
 sudo python ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
 ```
+- Make sure that there is connectivity between all the hosts by executing `pingall`.
 - Open a terminal on `h1` (`xterm h1`, IP address 192.168.1.101) to execute the first MQTT proxy, which is configured to forward MQTT traffic to `h4` (IP address 192.168.1.104):
 ```
 cd ~/MQTT2MULTICAST/SCAPY
@@ -156,3 +158,6 @@ mosquitto_pub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd" -m "message1"
 The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward the PUBLISH messages from one publisher (host `h3`) to one subscriber (host `h2`) using multicast.
 
 ![image](https://user-images.githubusercontent.com/17797704/147364627-2c40656d-000c-47bb-b002-cf6213739473.png)
+
+The following log file includes the messages from the RYU application: [ryu.log](https://github.com/jorgenavarroortiz/MQTT2MULTICAST/files/7799557/ryu.log)
+
