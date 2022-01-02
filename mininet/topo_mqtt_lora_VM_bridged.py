@@ -20,7 +20,7 @@ import getopt
 verbose = False
 delayLinkHost = '0ms'
 delayLinkSwitches = '0ms'
-fanoutPerLevel = [4,2,3] # Last fanout is for hosts
+fanoutPerLevel = [2,2] # Last fanout is for hosts
 realNetworkInterface = None
 hostToConnectRealNetworkInterface = None
 
