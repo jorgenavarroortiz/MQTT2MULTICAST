@@ -75,6 +75,7 @@ python3 ./bin/ryu-manager --verbose ryu/app/simple_switch_13_MQTT2MULTICAST.py 2
 cd ~/MQTT2MULTICAST
 sudo python ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
 ```
+- Make sure that there is connectivity between all the hosts by executing `pingall`.
 - Open a terminal on `h1` (`xterm h1`, IP address 192.168.1.101) to execute the first MQTT proxy, which is configured to forward MQTT traffic to `h4` (IP address 192.168.1.104):
 ```
 cd ~/MQTT2MULTICAST/SCAPY
@@ -128,6 +129,7 @@ python3 ./bin/ryu-manager --observe-links --verbose ryu/app/simple_switch_13_MQT
 cd ~/MQTT2MULTICAST
 sudo python ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
 ```
+- Make sure that there is connectivity between all the hosts by executing `pingall`.
 - Open a terminal on `h1` (`xterm h1`, IP address 192.168.1.101) to execute the first MQTT proxy, which is configured to forward MQTT traffic to `h4` (IP address 192.168.1.104):
 ```
 cd ~/MQTT2MULTICAST/SCAPY
