@@ -90,7 +90,7 @@ cd ~/MQTT2MULTICAST/SCAPY
 Test that MQTT messages are being forwarded:
 - Execute a subscriber on `h2`:
 ```
-mosquitto_sub -h 192.168.1.101 -t "topic1" -u "jorge" -P "pasaswd"
+mosquitto_sub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd"
 ```
 - Execute a publisher on `h3`:
 ```
