@@ -19,7 +19,7 @@ The forwarders may use UDP or multicast:
 - When using UDP, the MQTT proxy will send an `MQTT SUBSCRIBE` message to the other proxies as soon as the first MQTT client subscribes to a new topic. When the last of the subscribers for that topic is disconnected, an `MQTT UNSUBSCRIBE` message is sent to the other proxies. `MQTT PUBLISH` messages are forwarded only to other proxies that have at least one subscriber for that specific topic (not forwarded otherwise).
 - When using multicast, the forwarders will ask the MQTT2MULTICAST server which multicast IP address (starting e.g. from 225.0.0.0) is assigned to this specific topic using an `MQTT2MULTICAST REQUEST` message. The MQTT2MULTICAST server will assign multicast IP addresses to topics by following the order of the requests, and will respond with an `MQTT2MULTICAST REPLY` message. The MQTT2MULTICAST server will store the IP addresses of the MQTT proxies that are subscribed to specific topics, so this may be used to create a multicast tree for routing the multicast messages based on their destination multicast IP address. 
 
-**MULTICAST ROUTING based on this information is to be implemented**
+**MULTICAST ROUTING** based on this information is also implemented
 
 In order to implement multicast routing, the RYU application `simple_switch_13_MQTT2MULTICAST.py` has the following variables: `multicastReceiverForTopic`, which includes a list of subscribers (IP addresses) for a specific topic, and `topicToMulticast`, which translates between the topic space and the multicast IP addresses space. Thus, with both variables, we should be able to generate, on the RYU application, the corresponding flow rules for the switches to transmit the multicast messages to their corresponding receivers (i.e. create a multicast tree for each topic/multicast IP address).
 
@@ -155,7 +155,4 @@ The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward
 
 ## Experiment using multicast with Shortest Path First routing to forward MQTT messages within the SDN network
 
-We will employ the `networkx` package (Python package for the creation, manipulation, and study of the structure, dynamics, and functions of complex networks):
-```
-python3 -m pip install networkx
-```
+
