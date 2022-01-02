@@ -46,7 +46,8 @@ import time
 # Links for group tables
 # Information taken from https://github.com/knetsolutions/learn-sdn-with-ryu/blob/master/ryu-exercises/ex7_group_tables.py
 
-LEARNING_SWITCH = False # True for learning switch. If False, shortest path will be employed.
+LEARNING_SWITCH = False   # True for learning switch. If False, shortest path will be employed.
+MULTICAST_ROUTING = True  # If false, multicast messages will be broadcasted to all switches, since learning switch will be used.
 
 
 class SimpleSwitch13(app_manager.RyuApp):
@@ -338,7 +339,8 @@ class SimpleSwitch13(app_manager.RyuApp):
                 self.multicastTransmittersForTopicLastTimeSeen[pkt_ipv4.src + ' - ' + topic.decode()] = now
                 self.logger.info("### %s > MQTT2MULTICAST - multicast transmitters for topic %s: %s", now, topic.decode(), self.multicastTransmittersForTopic[topic.decode()])
 
-                self.updateMulticastRoutingTree(topic)
+                if MULTICAST_ROUTING:
+                    self.updateMulticastRoutingTree(topic)
 
             elif flags == 1:
                 # The sender subscribes to this multicast IP address
@@ -350,7 +352,8 @@ class SimpleSwitch13(app_manager.RyuApp):
                     self.multicastReceiversForTopic[topic.decode()] = [pkt_ipv4.src]
                 self.logger.info("### %s > MQTT2MULTICAST - multicast receivers for topic %s: %s", now, topic.decode(), self.multicastReceiversForTopic[topic.decode()])
 
-                self.updateMulticastRoutingTree(topic)
+                if MULTICAST_ROUTING:
+                    self.updateMulticastRoutingTree(topic)
 
             elif flags == 2:
                 # The sender unsubscribes to this multicast IP address
@@ -367,7 +370,8 @@ class SimpleSwitch13(app_manager.RyuApp):
                 else:
                     self.logger.info("### %s > MQTT2MULTICAST - multicast receivers for topic %s: %s", now, topic.decode(), self.multicastReceiverForsTopic[topic.decode()])
 
-                self.updateMulticastRoutingTree(topic)
+                if MULTICAST_ROUTING:
+                    self.updateMulticastRoutingTree(topic)
 
             # Create a new packet MQTT2MULTICAST REPLY to be sent
             if flags == 0 or flags == 1:
