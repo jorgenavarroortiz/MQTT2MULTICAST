@@ -44,6 +44,11 @@ The `packet type` can be 1 (`MQTT2MULTICAST REQUEST`) or 2 (`MQTT2MULTICAST REPL
 
 - If no UDP forwarders are configured nor MQTT2MULTICAST server is configured, the program will act as a simple MQTT broker supporting QoS=0.
 
+- The `topo_mqtt_lora_VM_bridged.py` script:
+  - can create a tree topology specifying the fanout of the switches on each level (please check the syntax with `-h`)
+  - allows to add delay in the links between switches (e.g. with `-D 10ms`) and in the links between switches and hosts (e.g. with `-d 20ms`)
+  - allows connecting a real network interface to a specific host (e.g. with `-r enp0s8 -R h1`)
+
 See the launch scripts (``mqtt_proxy1.sh`` and similar) to get examples. You can also use the help (argument ``-h``) to see the syntax.
 
 ## Experiment using UDP to forward MQTT messages within the SDN network
@@ -66,7 +71,7 @@ python3 ./bin/ryu-manager --verbose ryu/app/simple_switch_13_MQTT2MULTICAST.py 2
 - Open a terminal to execute mininet (you can change `halfrtt` and `use_real_interface`, as required for the particular experiment, in the Python script for the topology):
 ```
 cd ~/MQTT2MULTICAST
-sudo python ./mininet/topo_mqtt_lora_VM_bridged.py
+sudo python ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
 ```
 - Open a terminal on `h1` (`xterm h1`, IP address 192.168.1.101) to execute the first MQTT proxy, which is configured to forward MQTT traffic to `h4` (IP address 192.168.1.104):
 ```
@@ -117,7 +122,7 @@ python3 ./bin/ryu-manager --observe-links --verbose ryu/app/simple_switch_13_MQT
 - Open a terminal to execute mininet (you can change `halfrtt` and `use_real_interface`, as required for the particular experiment, in the Python script for the topology):
 ```
 cd ~/MQTT2MULTICAST
-sudo python ./mininet/topo_mqtt_lora_VM_bridged.py
+sudo python ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
 ```
 - Open a terminal on `h1` (`xterm h1`, IP address 192.168.1.101) to execute the first MQTT proxy, which is configured to forward MQTT traffic to `h4` (IP address 192.168.1.104):
 ```
