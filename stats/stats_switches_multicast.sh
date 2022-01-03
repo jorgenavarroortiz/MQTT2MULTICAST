@@ -2,7 +2,7 @@
 # Jorge Navarro-Ortiz (jorgenavarro@ugr.es), University of Granada, 2021
 
 # Remove previous auxiliary files
-rm aux.txt 2> /dev/null; rm aux2.txt 2> /dev/null; rm aux3.txt 2> /dev/null; rm aux4.txt 2> /dev/null
+rm aux*.txt 2> /dev/null
 
 # Get switches
 sudo ovs-vsctl show | grep Bridge | cut -d" " -f 6 | tr -d '"' > aux.txt
@@ -29,4 +29,4 @@ while read group; do
 done <aux4.txt
 
 # Remove auxiliary files
-rm aux.txt 2> /dev/null; rm aux2.txt 2> /dev/null; rm aux3.txt 2> /dev/null; rm aux4.txt 2> /dev/null
+rm aux*.txt 2> /dev/null
