@@ -121,7 +121,7 @@ def myNetwork():
 	# Create hosts
 	info( '*** Add hosts\n' )
 	hosts = []
-	for i in xrange(noHosts):
+	for i in range(noHosts):
 		hostname = 'h%d' % (i+1)
 		host = net.addHost(hostname, mac='00:00:00:00:00:%d' % (i+1), ip='192.168.1.%d' % (100+i+1))
 		hosts.append(host)
@@ -129,7 +129,7 @@ def myNetwork():
 	# Create switches
 	info( '*** Add switches\n' )
 	switches = []
-	for i in xrange(noSwitches):
+	for i in range(noSwitches):
 		switch = net.addSwitch('s%d' % (i+1), cls=OVSSwitch, protocols='OpenFlow13')
 		switches.append(switch)
 
@@ -211,7 +211,7 @@ def myNetwork():
 def usage():
 	print("This script will create a tree topology in Mininet. All levels are composed of switches except the last level, which is composed of hosts.")
 	print("Usage:   %s [-h] [-v] -f <fanout first level> -f <fanout second level> ... [-r <real network interface> -R <host to connect the real network interface>] [-d <delay in links to hosts>] [-D <delay in links between switches>]" % (sys.argv[0]))
-        print("Example to create a tree with root, 2 more levels of switches and one last level of hosts (L0 = root, L1 = 2 switches, L2 = 2 x 3 switches, L3 = 2 x 3 x 2 hosts):")
+	print("Example to create a tree with root, 2 more levels of switches and one last level of hosts (L0 = root, L1 = 2 switches, L2 = 2 x 3 switches, L3 = 2 x 3 x 2 hosts):")
 	print("         %s -v -f 2 -f 3 -f 2 -d 10ms" % (sys.argv[0]))
 
 def main():
