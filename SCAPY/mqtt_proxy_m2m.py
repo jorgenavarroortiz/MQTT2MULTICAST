@@ -16,6 +16,7 @@ import pdb
 
 import binascii
 import time
+from datetime import datetime
 
 # Dictionary of subscribers: each entry has the topic as key and a list of lists ({IP address, TCP port, QoS}) of the subscribers for that topic
 subscribersForTopic = {}
@@ -33,6 +34,8 @@ forwardersForTopic_lock = Lock() # To avoid concurrent access
 topicToMulticast = {}
 topicToMulticastBackup = {} # Backup not deleted when there are no subscribers for this topic. Intended for publishers, so the MQTT proxy can multicast their messages.
 transactionIDToTopic = {}
+lastTimePublishMessageInTopic = {}
+maxTimeBetweenPublishMessageInTopic = 3540 # 3600 is the default idle timeout of the SDN switches flow entries, so a slightly smaller value
 
 # TCP flags
 FIN = 0x01
@@ -170,9 +173,9 @@ class MQTTProxy:
           else:
               print("Broadcasting MQTT PUBLISH - no one subscribed to topic %s" % (topic))
 
-   def _checkIfTopicIsNewMQTT2MULTICAST(self, dstIPAddress, topic, flags):
+   def _checkIfTopicIsNewMQTT2MULTICAST(self, dstIPAddress, topic, flags, force):
       # If it is a new topic, send a MQTT2MULTICAST REQUEST message to the MQTT2MULTICAST server (SDN controller)
-      if topic.decode() in topicToMulticast:
+      if (topic.decode() in topicToMulticast) and (not force):
           # Existing topic
           multicastIPAddress = topicToMulticast[topic.decode()]
           print("[%s] MQTT2MULTICAST - existing topic=%s, multicast IP address=%s" % (threading.currentThread().getName(), topic, multicastIPAddress))
@@ -278,8 +281,18 @@ class MQTTProxy:
 
                 # If an MQTT2MULTICAST server is configured
                 if self.mqtt2multicast_ip_addr_server:
-                    if not topic.decode() in topicToMulticastBackup:
-                        self._checkIfTopicIsNewMQTT2MULTICAST(p[IP].dst, topic, 0)
+
+                    now = datetime.now()
+                    if topic.decode() in lastTimePublishMessageInTopic:
+                        timeBetweenPublishMessages = (now - lastTimePublishMessageInTopic[topic.decode()]).total_seconds()
+                        lastTimePublishMessageInTopic[topic.decode()] = now
+                        if timeBetweenPublishMessages >= maxTimeBetweenPublishMessageInTopic:
+                            # If the last publish message for this topic was too long ago, refresh the MQTT2MULTICAST messages
+                            self._checkIfTopicIsNewMQTT2MULTICAST(p[IP].dst, topic, 0, True)
+                    else:
+                        lastTimePublishMessageInTopic[topic.decode()] = now
+                        if not topic.decode() in topicToMulticastBackup:
+                            self._checkIfTopicIsNewMQTT2MULTICAST(p[IP].dst, topic, 0, False)
 
                 # Broadcast MQTT PUBLISH to subscribers connected to this proxy
                 self._broadcastMessageForTopic(p, topic.decode(), message.decode())
@@ -353,7 +366,7 @@ class MQTTProxy:
 
                 # If an MQTT2MULTICAST server is configured
                 if self.mqtt2multicast_ip_addr_server:
-                    self._checkIfTopicIsNewMQTT2MULTICAST(p[IP].dst, topic, 1)
+                    self._checkIfTopicIsNewMQTT2MULTICAST(p[IP].dst, topic, 1, False)
 
                 # Add subscriber to the list of topics (list of lists)
                 with subscribersForTopic_lock:

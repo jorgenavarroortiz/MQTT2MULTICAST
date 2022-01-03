@@ -492,7 +492,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 match = parser.OFPMatch(eth_type=0x800, ipv4_dst=multicastIPAddress)
                 self.send_group_mod(datapath, portList, groupTableID)
                 actions = [parser.OFPActionGroup(group_id=groupTableID)]
-                self.add_flow(datapath, priority, match, actions)
+                self.add_flow(datapath, priority, match, actions, None, self.idle_timeout)
 
         else:
             self.logger.info("### %s > MQTT2MULTICAST - multicast routing tree not updated, some information missing!!!")
@@ -519,7 +519,7 @@ class SimpleSwitch13(app_manager.RyuApp):
     ###################################################################################
     # Functions related to add flows
     ###################################################################################
-    def add_flow(self, datapath, priority, match, actions, buffer_id=None):
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None, timeout=0):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
@@ -528,10 +528,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
                                     priority=priority, match=match,
-                                    instructions=inst, idle_timeout=self.idle_timeout)
+                                    instructions=inst, idle_timeout=timeout)
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                    match=match, instructions=inst, idle_timeout=self.idle_timeout)
+                                    match=match, instructions=inst, idle_timeout=timeout)
         datapath.send_msg(mod)
 
 
