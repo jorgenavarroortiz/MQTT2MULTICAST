@@ -105,6 +105,8 @@ The following picture shows two MQTT proxies (hosts `h1` and `h4`) which forward
 
 ![image](https://user-images.githubusercontent.com/17797704/147362234-07a4e7ab-5b6c-417c-a49c-2e8a3ebd6a18.png)
 
+The following log file includes the messages from the RYU application: [ryu.log](https://github.com/jorgenavarroortiz/MQTT2MULTICAST/files/7799569/ryu.log)
+
 ## Experiment using multicast to forward MQTT messages within the SDN network
 
 In this example, `MQTT PUBLISH` messages will be forwarded using multicast IP addresses between any MQTT proxy connected to the SDN network with at least one subscriber subscribed to that topic.
@@ -130,15 +132,15 @@ cd ~/MQTT2MULTICAST
 sudo python ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
 ```
 - Make sure that there is connectivity between all the hosts by executing `pingall`.
-- Open a terminal on `h1` (`xterm h1`, IP address 192.168.1.101) to execute the first MQTT proxy, which is configured to forward MQTT traffic to `h4` (IP address 192.168.1.104):
+- Open a terminal on `h1` (`xterm h1`, IP address 192.168.1.101) to execute the first MQTT proxy, which is configured to forward MQTT traffic using multicast:
 ```
 cd ~/MQTT2MULTICAST/SCAPY
-./mqtt_proxy1_m2m.sh
+./mqtt_proxy_m2m.sh
 ```
-- Repeat on `h4` (`xterm h4`, IP address 192.168.1.104), so it will also forward MQTT traffic to `h1` (IP address 192.168.1.101):
+- Repeat on `h4` (`xterm h4`, IP address 192.168.1.104), so it will also forward MQTT traffic using multicast:
 ```
 cd ~/MQTT2MULTICAST/SCAPY
-./mqtt_proxy2_m2m.sh
+./mqtt_proxy_m2m.sh
 ```
 
 Test that MQTT messages are being forwarded:
