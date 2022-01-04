@@ -17,6 +17,7 @@ sed -i '/^$/d' aux3.txt
 sort aux3.txt | uniq > aux4.txt
 
 # Get statistics per group and per switch
+totalPackets=0
 while read group; do
     echo "Statistics for multicast group ${group}:"
     while read switch; do
@@ -24,8 +25,10 @@ while read group; do
         packets=`sudo ovs-ofctl dump-flows ${switch} -OOpenFlow13 | grep group:${group} | awk '{sub(/.*n_packets=/,X,$0);print $1}' | sed 's/,*$//g' | awk '{s+=$1} END {print s}'`
         if [[ $packets == "" ]]; then packets=0; fi
         echo "   Switch ${switch}: ${packets} packets"
+        totalPackets=$(($totalPackets + $packets))
 
     done <aux2.txt
+    echo "   Total: ${totalPackets} packets"
 done <aux4.txt
 
 # Remove auxiliary files
