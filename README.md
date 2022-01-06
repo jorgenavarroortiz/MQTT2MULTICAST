@@ -2,10 +2,11 @@
 
 © Jorge Navarro-Ortiz (jorgenavarro@ugr.es), University of Granada, 2021
 
-This repository is composed of two parts:
+This repository is composed of three parts:
 
 - An MQTT proxy created with SCAPY (tested with Scapy 2.4.4).
 - An MQTT2MULTICAST server, implemented as a SDN application at the RYU controller.
+- A multicast routing solution (SBT), implemented as a SDN application at the RYU controller.
 
 This implementation has two objectives:
 
