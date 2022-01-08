@@ -2,10 +2,11 @@
 
 © Jorge Navarro-Ortiz (jorgenavarro@ugr.es), University of Granada, 2021
 
-This repository is composed of two parts:
+This repository is composed of three parts:
 
 - An MQTT proxy created with SCAPY (tested with Scapy 2.4.4).
 - An MQTT2MULTICAST server, implemented as a SDN application at the RYU controller.
+- A multicast routing solution (SBT), implemented as a SDN application at the RYU controller.
 
 This implementation has two objectives:
 
@@ -52,6 +53,49 @@ The `packet type` can be 1 (`MQTT2MULTICAST REQUEST`) or 2 (`MQTT2MULTICAST REPL
   - allows connecting a real network interface to a specific host (e.g. with `-r enp0s8 -R h1`)
 
 See the launch scripts (``mqtt_proxy1.sh`` and similar) to get examples. You can also use the help (argument ``-h``) to see the syntax.
+
+## Experiment using this MQTT proxy as an MQTT broker
+
+In this example, all publishers and subscribers will connect directly to the MQTT proxy, which will act as a MQTT broker.
+
+This experiment uses `mininet` with a tree topology with a 3 switches (one root, `s1`, and two leaves, `s2` and `s3`) which connect two hosts to each leaf (`h1` and `h2` to `s2` and `h3` and `h4` to `s3`). `h1` and `h4` will act as MQTT proxies. `h2` will be an MQTT subscriber, subscribed to topic `topic1`, whereas `h3` will be an MQTT publisher, which will publish a message on that topic.
+
+Steps to execute the experiment:
+- Clone this repository:
+```
+cd $HOME
+git clone https://github.com/jorgenavarroortiz/MQTT2MULTICAST.git
+```
+- Open a terminal to execute RYU:
+```
+cd ~/MQTT2MULTICAST/RYU
+python3 ./bin/ryu-manager --verbose ryu/app/simple_switch_13.py 2>&1 | tee ryu.log
+```
+- Open a terminal to execute mininet (you can change `halfrtt` and `use_real_interface`, as required for the particular experiment, in the Python script for the topology):
+```
+cd ~/MQTT2MULTICAST
+sudo python3 ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
+```
+- Make sure that there is connectivity between all the hosts by executing `pingall`.
+- Open a terminal on `h1` (`xterm h1`, IP address 192.168.1.101) to execute the MQTT broker:
+```
+cd ~/MQTT2MULTICAST/SCAPY
+./mqtt_proxy_as_broker.sh
+```
+
+Test that MQTT messages are transmitted/received correctly:
+- Execute a subscriber on `h2`:
+```
+mosquitto_sub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd"
+```
+- Execute a publisher on `h3`:
+```
+mosquitto_pub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd" -m "message1"
+```
+
+The following picture shows this scenario working.
+
+![mqtt-broker](https://user-images.githubusercontent.com/17797704/148639782-416f31e7-d8e2-46ac-9b82-5f979e26defd.png)
 
 ## Experiment using UDP to forward MQTT messages within the SDN network
 
