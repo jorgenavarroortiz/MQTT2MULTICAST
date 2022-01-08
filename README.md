@@ -69,7 +69,7 @@ git clone https://github.com/jorgenavarroortiz/MQTT2MULTICAST.git
 - Open a terminal to execute RYU:
 ```
 cd ~/MQTT2MULTICAST/RYU
-python3 ./bin/ryu-manager --verbose ryu/app/simple_switch_13_MQTT2MULTICAST.py 2>&1 | tee ryu.log
+python3 ./bin/ryu-manager --verbose ryu/app/simple_switch_13.py 2>&1 | tee ryu.log
 ```
 - Open a terminal to execute mininet (you can change `halfrtt` and `use_real_interface`, as required for the particular experiment, in the Python script for the topology):
 ```
