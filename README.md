@@ -80,7 +80,7 @@ sudo python3 ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
 - Open a terminal on `h1` (`xterm h1`, IP address 192.168.1.101) to execute the MQTT broker:
 ```
 cd ~/MQTT2MULTICAST/SCAPY
-./mqtt_proxy_broker.sh
+./mqtt_proxy_as_broker.sh
 ```
 
 Test that MQTT messages are transmitted/received correctly:
