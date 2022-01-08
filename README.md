@@ -95,9 +95,7 @@ mosquitto_pub -h 192.168.1.101 -t "topic1" -u "jorge" -P "passwd" -m "message1"
 
 The following picture shows this scenario working.
 
-
-
-The following log file includes the messages from the RYU application: 
+![mqtt-broker](https://user-images.githubusercontent.com/17797704/148639782-416f31e7-d8e2-46ac-9b82-5f979e26defd.png)
 
 ## Experiment using UDP to forward MQTT messages within the SDN network
 
