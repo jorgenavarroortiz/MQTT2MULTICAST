@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DELAY=5
-BROKER='192.168.1.104'
+DELAY=10
+BROKER='192.168.1.101'
 TOPIC='topic'
 USER='jorge'
 PASS='passwd'

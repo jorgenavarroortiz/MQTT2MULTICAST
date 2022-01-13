@@ -18,6 +18,8 @@ import binascii
 import time
 from datetime import datetime
 
+DEBUG=False
+
 # Dictionary of subscribers: each entry has the topic as key and a list of lists ({IP address, TCP port, QoS}) of the subscribers for that topic
 subscribersForTopic = {}
 subscribersForTopic_lock = Lock() # To avoid concurrent access
@@ -70,7 +72,7 @@ class MQTTProxy:
       send(ackPacket, verbose=False)
 
       threadName = threading.currentThread().getName()
-      print ("[%s] %s TCP ACK sent! (seq=%d, ack=%d)" % (threadName, index, ackPacket[TCP].seq - tcpInitSeqList[index], ackPacket[TCP].ack - tcpInitAckList[index]))
+      if DEBUG: print ("[%s] %s TCP ACK sent! (seq=%d, ack=%d)" % (threadName, index, ackPacket[TCP].seq - tcpInitSeqList[index], ackPacket[TCP].ack - tcpInitAckList[index]))
 
    def _disconnect(self, dstIPAddress, srcIPAddress, tcpPort, connected):
       connected = False
@@ -103,10 +105,10 @@ class MQTTProxy:
                           send(ipF/udpF/mqttF, verbose=False)
 
 
-      print("[%s] %s (TCP port %d) disconnected. TOPICS-SUBSCRIBERS list: %s" % (threading.currentThread().getName(), srcIPAddress, tcpPort, subscribersForTopic))
+      if DEBUG: print("[%s] %s (TCP port %d) disconnected. TOPICS-SUBSCRIBERS list: %s" % (threading.currentThread().getName(), srcIPAddress, tcpPort, subscribersForTopic))
 
    def _timerExpiration(self, p, connected):
-       print("[%s] Keep alive (MQTT PING REQUEST) timeout!!!" % (threading.currentThread().getName()))
+       if DEBUG: print("[%s] Keep alive (MQTT PING REQUEST) timeout!!!" % (threading.currentThread().getName()))
        self._disconnect(p[IP].dst, p[IP].src, p[TCP].sport, connected)
 
    def _ack_rclose(self, p, connected):
@@ -128,7 +130,7 @@ class MQTTProxy:
       send(finAckPacket, verbose=False)
 
       threadName = threading.currentThread().getName()
-      print ("[%s] %s TCP FIN + ACK sent! (seq=%d, ack=%d)" % (threadName, index, finAckPacket[TCP].seq - tcpInitSeqList[index], finAckPacket[TCP].ack - tcpInitAckList[index]))
+      if DEBUG: print ("[%s] %s TCP FIN + ACK sent! (seq=%d, ack=%d)" % (threadName, index, finAckPacket[TCP].seq - tcpInitSeqList[index], finAckPacket[TCP].ack - tcpInitAckList[index]))
 
       tcpSeqList[index] = tcpSeqList[index] + 1
 
@@ -146,7 +148,7 @@ class MQTTProxy:
           connected = False
           threadName = threading.currentThread().getName()
           index = tuple([p[IP].src,p[TCP].sport])
-          print("[%s] FIN received within this MQTT message (seq=%d, ack=%d, len=%d), tcpAckList: %s" % (threadName, p[TCP].seq - tcpInitAckList[index], p[TCP].ack - tcpInitSeqList[index], len(p[MQTT]), tcpAckList))
+          if DEBUG: print("[%s] FIN received within this MQTT message (seq=%d, ack=%d, len=%d), tcpAckList: %s" % (threadName, p[TCP].seq - tcpInitAckList[index], p[TCP].ack - tcpInitSeqList[index], len(p[MQTT]), tcpAckList))
           tcpAckList[index] = tcpAckList[index] + 1
           self._ack_rclose(p, connected)
 
@@ -168,7 +170,7 @@ class MQTTProxy:
 #                  pdb.set_trace()
                   send(ipB/tcpB/mqttB)#, verbose=False)
                   threadName = threading.currentThread().getName()
-                  print ("[%s] %s MQTT PUBLISH sent! (src=%s, dst=%s, seq=%d, ack=%d, len=%d)" % (threadName, index, p[IP].dst, ipAddress, tcpB.seq - tcpInitSeqList[index], tcpB.ack - tcpInitAckList[index], len(mqttB)))
+                  if DEBUG: print("[%s] %s MQTT PUBLISH sent! (src=%s, dst=%s, seq=%d, ack=%d, len=%d)" % (threadName, index, p[IP].dst, ipAddress, tcpB.seq - tcpInitSeqList[index], tcpB.ack - tcpInitAckList[index], len(mqttB)))
                   tcpSeqList[index] = tcpSeqList[index] + len(mqttB)
           else:
               print("Broadcasting MQTT PUBLISH - no one subscribed to topic %s" % (topic))
@@ -178,7 +180,7 @@ class MQTTProxy:
       if (topic.decode() in topicToMulticast) and (not force):
           # Existing topic
           multicastIPAddress = topicToMulticast[topic.decode()]
-          print("[%s] MQTT2MULTICAST - existing topic=%s, multicast IP address=%s" % (threading.currentThread().getName(), topic, multicastIPAddress))
+          if DEBUG: print("[%s] MQTT2MULTICAST - existing topic=%s, multicast IP address=%s" % (threading.currentThread().getName(), topic, multicastIPAddress))
 
       else:
           # New topic
@@ -220,7 +222,7 @@ class MQTTProxy:
 
           if topic in topicToMulticast:
               del topicToMulticast[topic]
-          print("[%s] MQTT2MULTICAST - topicToMulticast: %s" % (threading.currentThread().getName(), topicToMulticast))
+          if DEBUG: print("[%s] MQTT2MULTICAST - topicToMulticast: %s" % (threading.currentThread().getName(), topicToMulticast))
           
 
    def _mqttProxy(self, clientIPAddress, clientTCPPort):
@@ -228,13 +230,13 @@ class MQTTProxy:
       keepAlive = 60 # Default value, sent on MQTT CONNECT
       threadName = threading.currentThread().getName()
 
-      print("[%s] NEW THREAD for client %s (TCP port %s)" % (threadName, clientIPAddress, clientTCPPort))
+      if DEBUG: print("[%s] NEW THREAD for client %s (TCP port %s)" % (threadName, clientIPAddress, clientTCPPort))
 
 # IMPORTANT: L3RawSocket filters DO NOW WORK (or I am not able to get them working!), so finally I have used the sniff() function (in which filters do work)
 #      s = L3RawSocket(filter='host ' + str(clientIPAddress) + ' and tcp and tcp port ' + str(clientTCPPort))
 
       interfacesList = get_if_list()#[1:]
-      print("[%s] MQTT proxy - interfaces to sniff: %s (all interfaces: %s)" % (threadName, interfacesList, get_if_list()))
+      if DEBUG: print("[%s] MQTT proxy - interfaces to sniff: %s (all interfaces: %s)" % (threadName, interfacesList, get_if_list()))
       while connected:
 #         p = s.recv(MTU)
 
@@ -243,11 +245,11 @@ class MQTTProxy:
          # MQTT message received
          if p.haslayer(TCP) and p.haslayer(MQTT) and p[TCP].dport == self.tcpport:
             index = tuple([p[IP].src,p[TCP].sport])
-#            print("[%s] %s MQTT packet type: %d" % (threadName, index, p[MQTT].type))
-#            print("[%s] tcpAckList: %s" % (threadName, tcpAckList))
+#            if DEBUG: print("[%s] %s MQTT packet type: %d" % (threadName, index, p[MQTT].type))
+#            if DEBUG: print("[%s] tcpAckList: %s" % (threadName, tcpAckList))
             if p[TCP].seq >= tcpAckList[index]:
                tcpAckList[index] = tcpAckList[index] + len(p[MQTT])
-#               print("[%s] tcpAckList[%s]: %d, p[TCP].seq: %d" % (threadName, index, tcpAckList[index] - tcpInitAckList[index], p[TCP].seq - tcpInitAckList[index]))
+#               if DEBUG: print("[%s] tcpAckList[%s]: %d, p[TCP].seq: %d" % (threadName, index, tcpAckList[index] - tcpInitAckList[index], p[TCP].seq - tcpInitAckList[index]))
             else:
                print("[%s] DUPLICATED!!! - tcpAckList[%s]: %d, p[TCP].seq: %d" % (threadName, index, tcpAckList[index] - tcpInitAckList[index], p[TCP].seq - tcpInitAckList[index]))
                continue
@@ -267,7 +269,7 @@ class MQTTProxy:
 
                 self._sendAckIfNeeded(p, connected)
                 send(ip/tcp/mqtt, verbose=False)
-                print ("[%s] %s MQTT CONNACK sent! (seq=%d, ack=%d, len=%d)" % (threadName, index, tcp.seq - tcpInitSeqList[index], tcp.ack - tcpInitAckList[index], len(mqtt)))
+                if DEBUG: print ("[%s] %s MQTT CONNACK sent! (seq=%d, ack=%d, len=%d)" % (threadName, index, tcp.seq - tcpInitSeqList[index], tcp.ack - tcpInitAckList[index], len(mqtt)))
                 tcpSeqList[index] = tcpSeqList[index] + len(mqtt)
 
             elif p[MQTT].type == 3:
@@ -299,7 +301,7 @@ class MQTTProxy:
 
                 # Send to the multicast address assigned to this topic
                 if self.mqtt2multicast_ip_addr_server:
-                    print("[%s] topicToMulticastBackup: %s, topic=%s" % (threadName, topicToMulticastBackup, topic.decode()))
+                    if DEBUG: print("[%s] topicToMulticastBackup: %s, topic=%s" % (threadName, topicToMulticastBackup, topic.decode()))
 
                     if topic.decode() in topicToMulticastBackup:
                         # Existing topic
@@ -387,36 +389,36 @@ class MQTTProxy:
                                 mqttF = p[MQTT]
                                 send(ipF/udpF/mqttF, verbose=False)
 
-                print("[%s] %s Subscribers list for this topic: %s" % (threadName, index, subscribersForTopic[topic.decode()]))
-                print("[%s] %s TOPICS-SUBSCRIBERS list:         %s" % (threadName, index, subscribersForTopic))
+                if DEBUG: print("[%s] %s Subscribers list for this topic: %s" % (threadName, index, subscribersForTopic[topic.decode()]))
+                if DEBUG: print("[%s] %s TOPICS-SUBSCRIBERS list:         %s" % (threadName, index, subscribersForTopic))
 
                 ip = IP(src=p[IP].dst, dst=p[IP].src)
                 tcp = TCP(sport=self.tcpport, dport=p[TCP].sport, flags='A', seq=tcpSeqList[index], ack=tcpAckList[index])
                 mqtt = MQTT()/MQTTSuback(msgid=p[MQTT].msgid, retcode=QOS) # 'retcode' in MQTT SUBACK is really granted QoS
                 self._sendAckIfNeeded(p, connected)
                 send(ip/tcp/mqtt, verbose=False)
-                print ("[%s] %s MQTT SUBACK sent! (seq=%d, ack=%d, len=%d)" % (threadName, index, tcp.seq - tcpInitSeqList[index], tcp.ack - tcpInitAckList[index], len(mqtt)))
+                if DEBUG: print ("[%s] %s MQTT SUBACK sent! (seq=%d, ack=%d, len=%d)" % (threadName, index, tcp.seq - tcpInitSeqList[index], tcp.ack - tcpInitAckList[index], len(mqtt)))
                 tcpSeqList[index] = tcpSeqList[index] + len(mqtt)
 
                 # Create a timer. If there is a timeout (PING REQUEST not received), the client is assumed to be disconnected.
-                print("[%s] %s KEEP ALIVE timer started!!!" % (threadName, index))
+                if DEBUG: print("[%s] %s KEEP ALIVE timer started!!!" % (threadName, index))
                 t = Timer(keepAlive+10, self._timerExpiration, args=(p, connected,))
                 t.start()
 
             elif p[MQTT].type == 12:
                 # PING REQUEST received, sending MQTT PING RESPONSE
 #                pdb.set_trace()
-                print("[%s] %s MQTT PING REQUEST received (seq=%d, ack=%d, len=%d)" % (threadName, index, p[TCP].seq - tcpInitAckList[index], p[TCP].ack - tcpInitSeqList[index], len(p[MQTT])))
+                if DEBUG: print("[%s] %s MQTT PING REQUEST received (seq=%d, ack=%d, len=%d)" % (threadName, index, p[TCP].seq - tcpInitAckList[index], p[TCP].ack - tcpInitSeqList[index], len(p[MQTT])))
                 ip = IP(src=p[IP].dst, dst=p[IP].src)
                 tcp = TCP(sport=self.tcpport, dport=p[TCP].sport, flags='A', seq=tcpSeqList[index], ack=tcpAckList[index])
                 mqtt = MQTT(type=13,len=0)
                 self._sendAckIfNeeded(p, connected)
                 send(ip/tcp/mqtt, verbose=False)
-                print ("[%s] %s MQTT PING RESPONSE sent! (seq=%d, ack=%d, len=%d)" % (threadName, index, tcp.seq - tcpInitSeqList[index], tcp.ack - tcpInitAckList[index], len(mqtt)))
+                if DEBUG: print ("[%s] %s MQTT PING RESPONSE sent! (seq=%d, ack=%d, len=%d)" % (threadName, index, tcp.seq - tcpInitSeqList[index], tcp.ack - tcpInitAckList[index], len(mqtt)))
                 tcpSeqList[index] = tcpSeqList[index] + len(mqtt)
 
                 # Restart timer
-                print("[%s] %s Keep alive timer restarted!!!" % (threadName, index))
+                if DEBUG: print("[%s] %s Keep alive timer restarted!!!" % (threadName, index))
                 t.cancel()
                 t = Timer(keepAlive+10, self._timerExpiration, args=(p, connected,))
                 t.start()
@@ -434,10 +436,10 @@ class MQTTProxy:
          # TCP FIN received, sending TCP FIN+ACK
          elif p.haslayer(TCP) and p[TCP].dport == self.tcpport and p[TCP].flags & FIN:
             index = tuple([p[IP].src,p[TCP].sport])
-            print ("[%s] %s TCP FIN received (seq=%d, ack=%d)" % (threadName, index, p[TCP].seq - tcpInitAckList[index], p[TCP].ack - tcpInitSeqList[index]))
+            if DEBUG: print ("[%s] %s TCP FIN received (seq=%d, ack=%d)" % (threadName, index, p[TCP].seq - tcpInitAckList[index], p[TCP].ack - tcpInitSeqList[index]))
 
             connected = False
-            print("[%s] tcpAckList: %s" % (threadName, tcpAckList))
+            if DEBUG: print("[%s] tcpAckList: %s" % (threadName, tcpAckList))
             tcpAckList[index] = tcpAckList[index] + 1
 #            pdb.set_trace()
             self._ack_rclose(p, connected)
@@ -445,7 +447,7 @@ class MQTTProxy:
          # TCP ACK received
          elif p.haslayer(TCP) and p[TCP].dport == self.tcpport and p[TCP].flags & ACK:
             index = tuple([p[IP].src,p[TCP].sport])
-            print ("[%s] %s TCP ACK received! (seq=%d, ack=%d)" % (threadName, index, p[TCP].seq - tcpInitAckList[index], p[TCP].ack - tcpInitSeqList[index])) # Do nothing
+            if DEBUG: print ("[%s] %s TCP ACK received! (seq=%d, ack=%d)" % (threadName, index, p[TCP].seq - tcpInitAckList[index], p[TCP].ack - tcpInitSeqList[index])) # Do nothing
 
 #      s.close()
       self._mqttServerThread = None
@@ -464,9 +466,9 @@ class MQTTProxy:
          print("[MAIN] Waiting for a new connection on port " + str(self.tcpport) + "...")
          # Wait for a new connection (TCP SYN on server's port)
          interfacesList = get_if_list()#[1:]
-         print("[MAIN] Interfaces to sniff: %s (all interfaces: %s)" % (interfacesList, get_if_list()))
+         if DEBUG: print("[MAIN] Interfaces to sniff: %s (all interfaces: %s)" % (interfacesList, get_if_list()))
          synPacket = sniff(count=1, iface=interfacesList, filter='tcp and port ' + str(self.tcpport) + ' and tcp[tcpflags] & tcp-syn != 0 and tcp[tcpflags] & tcp-ack == 0')[0]
-         print ("[MAIN] NEW CONNECTION: Received TCP SYN from %s (TCP port %s) (seq=0, ack=0)" % (synPacket[IP].src, synPacket[TCP].sport))
+         if DEBUG: print ("[MAIN] NEW CONNECTION: Received TCP SYN from %s (TCP port %s) (seq=0, ack=0)" % (synPacket[IP].src, synPacket[TCP].sport))
          # Create TCP SYN+ACK packet
          sport = synPacket[TCP].sport
          index = tuple([synPacket[IP].src,synPacket[TCP].sport])
@@ -474,7 +476,7 @@ class MQTTProxy:
          tcpSeqList[index] = tcpInitSeqList[index]
          tcpInitAckList[index] = synPacket[TCP].seq
          tcpAckList[index] = tcpInitAckList[index] + 1 # SYN+ACK
-#         print("[MAIN] tcpAckList: %s" % (tcpAckList))
+#         if DEBUG: print("[MAIN] tcpAckList: %s" % (tcpAckList))
 
          # Generating the IP layer
          ip = IP(src=synPacket[IP].dst, dst=synPacket[IP].src)
@@ -485,17 +487,17 @@ class MQTTProxy:
          # Send SYN+ACK and receive ACK
          tcpSeqList[index] = tcpSeqList[index] + 1
          send(ip/tcpSynAck, verbose=False)
-         print ("[MAIN] %s TCP SYN+ACK sent! (seq=%d, ack=%d)" % (index, tcpSynAck.seq - tcpInitSeqList[index], tcpSynAck.ack - tcpInitAckList[index]))
+         if DEBUG: print ("[MAIN] %s TCP SYN+ACK sent! (seq=%d, ack=%d)" % (index, tcpSynAck.seq - tcpInitSeqList[index], tcpSynAck.ack - tcpInitAckList[index]))
 
    def _udpForwarder(self):
       # Infinite loop to handle UDP messages from other MQTT proxies
       # Wait for a new UDP (MQTT) packet from the corresponding port
       interfacesList = get_if_list()#[1:]
-      print("[%s] UDP forwarder - interfaces to sniff: %s (all interfaces: %s)" % (threading.currentThread().getName(), interfacesList, get_if_list()))
+      if DEBUG: print("[%s] UDP forwarder - interfaces to sniff: %s (all interfaces: %s)" % (threading.currentThread().getName(), interfacesList, get_if_list()))
 
       while True:
          p = sniff(count=1, iface=interfacesList, filter='inbound and udp and port ' + str(self.udpport))[0] 
-         print ("[%s] FORWARDER received packet %s from %s (UDP port %d)" % (threading.currentThread().getName(), p, p[IP].src, p[UDP].sport))
+         if DEBUG: print ("[%s] FORWARDER received packet %s from %s (UDP port %d)" % (threading.currentThread().getName(), p, p[IP].src, p[UDP].sport))
 #         pdb.set_trace()
 
          if p.haslayer(MQTT):
@@ -515,7 +517,7 @@ class MQTTProxy:
                      else:
                          # New topic
                          forwardersForTopic[topic.decode()] = [[forwarderIPAddress]]
-                     print("[FORWARDER] forwardersForTopic: %s" % (forwardersForTopic))
+                     if DEBUG: print("[FORWARDER] forwardersForTopic: %s" % (forwardersForTopic))
 
              elif p[MQTT].type == 11:
                  # UNSUBSCRIBE
@@ -534,7 +536,7 @@ class MQTTProxy:
                      # If this key has no content, remove it from the dictionary
                      if not forwardersForTopic[topic]:
                          del forwardersForTopic[topic]
-                     print("[FORWARDER] forwardersForTopic: %s" % (forwardersForTopic))
+                     if DEBUG: print("[FORWARDER] forwardersForTopic: %s" % (forwardersForTopic))
 
              elif p[MQTT].type == 3:
                  # PUBLISH: forward this MQTT message to the forwarders subscribed on this proxy
@@ -553,17 +555,17 @@ class MQTTProxy:
       # Infinite loop to handle MQTT2MULTICAST messages from the MQTT2MULTICAST server
       # Wait for a new UDP (MQTT2MULTICAST) packet from the corresponding port
       interfacesList = get_if_list()#[1:]
-      print("[%s] MQTT2MULTICAST listeners - interfaces to sniff: %s (all interfaces: %s)" % (threading.currentThread().getName(), interfacesList, get_if_list()))
+      if DEBUG: print("[%s] MQTT2MULTICAST listeners - interfaces to sniff: %s (all interfaces: %s)" % (threading.currentThread().getName(), interfacesList, get_if_list()))
 
       while True:
          p = sniff(count=1, iface=interfacesList, filter='inbound and udp and port ' + str(self.mqtt2multicast_udp_port_client))[0] 
 #         pdb.set_trace()
 
-         print("[%s] MQTT2MULTICAST message received!!!" % (threading.currentThread().getName()))
+         if DEBUG: print("[%s] MQTT2MULTICAST message received!!!" % (threading.currentThread().getName()))
 
          if p.haslayer(UDP):
             hexStr=binascii.hexlify(bytes(p[UDP].payload))
-            print ("[%s] MQTT2MULTICAST listener received from %s (UDP port %d) packet with payload: 0x%s" % (threading.currentThread().getName(), p[IP].src, p[UDP].sport, hexStr.decode()))
+            if DEBUG: print("[%s] MQTT2MULTICAST listener received from %s (UDP port %d) packet with payload: 0x%s" % (threading.currentThread().getName(), p[IP].src, p[UDP].sport, hexStr.decode()))
 
          tmpBuffer = bytes(p[UDP].payload)
          _MQTT2MULTICAST_PACK_STR='!BIB'

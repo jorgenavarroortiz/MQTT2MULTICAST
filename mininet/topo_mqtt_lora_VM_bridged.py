@@ -16,6 +16,8 @@ import re
 import sys
 import getopt
 
+import io, os
+
 # Default values
 verbose = False
 delayLinkHost = '0ms'
@@ -218,6 +220,12 @@ def main():
 	global delayLinkHost, delayLinkSwitches, fanoutPerLevel, realNetworkInterface, elementToConnectRealNetworkInterface, RH, RS, numberElement
 
 	try:
+		os.remove('/tmp/delay')
+		os.remove('/tmp/DELAY')
+	except:
+		print("Error while deleting file /tmp/DELAY")
+
+	try:
 		opts, args = getopt.getopt(sys.argv[1:], "hf:d:D:r:R:v", ["help", "output="])
 	except getopt.GetoptError as err:
 		# print help information and exit:
@@ -235,9 +243,19 @@ def main():
 		elif o == "-d":
 			delayLinkHost = a
 			print("Delay in links to hosts: %s" % (delayLinkHost))
+
+			f = open("/tmp/delay", "w")
+			f.write(delayLinkHost)
+			f.close()
+
 		elif o == "-D":
 			delayLinkSwitches = a
 			print("Delay in links between switches: %s" % (delayLinkSwitches))
+
+			f = open("/tmp/DELAY", "w")
+			f.write(delayLinkSwitches)
+			f.close()
+
 		elif o in ("-f", "--fanout"):
 			if f == 0:
 				f = 1
