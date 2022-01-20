@@ -19,7 +19,8 @@ import getopt
 import io, os
 
 PACKETCAPTURE=False
-GENERATETRAFFIC=False # For traffic generation, we assume 2 hosts per switch (fanout=2 in the last level), the first one with MQTT proxy and the second one subscribing and publishing messages
+GENERATETRAFFIC1=False # For traffic generation, using MQTT proxies, we assume 2 hosts per switch (fanout=2 in the last level), the first one with MQTT proxy and the second one subscribing and publishing messages
+GENERATETRAFFIC2=False # For traffic generation, using one MQTT broker in host h1, we assume 1 host per switch (fanout=1 in the last level), subscribing and publishing messages
 
 # Default values
 verbose = False
@@ -201,8 +202,8 @@ def myNetwork():
 		for sw in net.switches:
 			sw.cmd("sudo tshark -i any -w /tmp/%s.pcap 2>&1 &" % (sw.name))
 
-	# Start PIMD traffic (odd hosts, i.e. h1, h3, h5, ... will be the MQTT proxies; even hosts, i.e. h2, h4, h6, ... will be MQTT subscribers; all the even hosts will publish MQTT messages periodically)
-	if GENERATETRAFFIC:
+	# Start MQTT traffic using MQTT proxies (odd hosts, i.e. h1, h3, h5, ... will be the MQTT proxies; even hosts, i.e. h2, h4, h6, ... will be MQTT subscribers; all the even hosts will publish MQTT messages periodically)
+	if GENERATETRAFFIC1:
 		for h in net.hosts:
 			hostNo = int(h.name[1:])
 			if ((hostNo % 2) == 1):
@@ -210,9 +211,21 @@ def myNetwork():
 				h.cmd("cd ~/MQTT2MULTICAST/SCAPY; ./mqtt_proxy_m2m.sh &")
 			else:
 				# Even host
-				h.cmd("~/MQTT2MULTICAST/scripts_mqtt/start_mqtt_subscriber.sh &")
+				h.cmd("~/MQTT2MULTICAST/scripts_mqtt/start_mqtt_subscriber.sh 192.168.1.%s &" % (lastByteProxy))
 				lastByteProxy = str(100 + hostNo - 1) # Previous hosts, i.e. h2 will publish to MQTT proxy at h1
 				h.cmd("~/MQTT2MULTICAST/scripts_mqtt/start_mqtt_publisher.sh 192.168.1.%s &" % (lastByteProxy))
+
+	# Start MQTT traffic using MQTT proxies (odd hosts, i.e. h1, h3, h5, ... will be the MQTT proxies; even hosts, i.e. h2, h4, h6, ... will be MQTT subscribers; all the even hosts will publish MQTT messages periodically)
+	if GENERATETRAFFIC2:
+		for h in net.hosts:
+			hostNo = int(h.name[1:])
+			if (hostNo == 1):
+				# Host h1 with MQTT broker
+				h.cmd("cd ~/MQTT2MULTICAST/SCAPY; ./mqtt_proxy_as_broker.sh &")
+			elif ((hostNo % 2) != 1):
+				# Even hosts (second host on each switch, even h2 which is connected to the same switch than h1)
+				h.cmd("~/MQTT2MULTICAST/mininet/start_mqtt_subscriber.sh 192.168.1.101 &")
+				h.cmd("~/MQTT2MULTICAST/mininet/start_mqtt_publisher.sh 192.168.1.101 &")
 
 	# "Real" network interface connected to host
 	if RH == 1:
@@ -238,12 +251,17 @@ def usage():
 	print("This script will create a tree topology in Mininet. All levels are composed of switches except the last level, which is composed of hosts.")
 	print("Usage:   %s [-h] [-v] -f <fanout first level> -f <fanout second level> ... [-r <real network interface> -R <host to connect the real network interface>] [-d <delay in links to hosts>] [-D <delay in links between switches>] [-P] [-G]" % (sys.argv[0]))
 	print("         -P ...... capture packets for each host and switch in /tmp directory (s*.pcap, h*.pcap)")
-	print("         -G ...... generate traffic; we assume that each leaf switch has two hosts; the first one executes an MQTT proxy, the second one subscribes to topic \"topic1\" and generates traffic (publishes messages) in that topic")
+	print("         -G ...... generate traffic using MQTT proxies; we assume that each leaf switch has two hosts; the first one executes an MQTT proxy, the second one subscribes to topic \"topic1\" and generates traffic (publishes messages) in that topic")
+	print("         -g ...... generate traffic using one MQTT broker in host h1; for simplicity, we assume that each leaf switch has two hosts, but only the second host subscribes to topic \"topic1\" and generates traffic (publishes messages) in that topic; the first host is idle.")
 	print("Example to create a tree with root, 2 more levels of switches and one last level of hosts (L0 = root, L1 = 2 switches, L2 = 2 x 3 switches, L3 = 2 x 3 x 2 hosts):")
 	print("         %s -v -f 2 -f 3 -f 2 -d 10ms" % (sys.argv[0]))
+	print("Example to create a tree, generate traffic using MQTT proxies and capture traffic:")
+	print("         %s -v -f 2 -f 3 -f 2 -G -P" % (sys.argv[0]))
+	print("Example to create a tree, generate traffic using one MQTT broker on h1 and capture traffic:")
+	print("         %s -v -f 2 -f 3 -f 2 -g -P" % (sys.argv[0]))
 
 def main():
-	global delayLinkHost, delayLinkSwitches, fanoutPerLevel, realNetworkInterface, elementToConnectRealNetworkInterface, RH, RS, numberElement
+	global delayLinkHost, delayLinkSwitches, fanoutPerLevel, realNetworkInterface, elementToConnectRealNetworkInterface, RH, RS, numberElement, GENERATETRAFFIC1, GENERATETRAFFIC2, PACKETCAPTURE
 
 	try:
 		os.remove('/tmp/delay')
@@ -253,7 +271,7 @@ def main():
 		print("Error while deleting a file")
 
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hPGf:d:D:r:R:v", ["help", "output="])
+		opts, args = getopt.getopt(sys.argv[1:], "hPGgf:d:D:r:R:v", ["help", "output="])
 	except getopt.GetoptError as err:
 		# print help information and exit:
 		print(err)
@@ -274,8 +292,12 @@ def main():
 			print("Packet capture: %s" % (PACKETCAPTURE))
 
 		elif o == "-G":
-			GENERATETRAFFIC = True
-			print("Generate MQTT traffic: %s" % (GENERATETRAFFIC))
+			GENERATETRAFFIC1 = True
+			print("Generate MQTT traffic using MQTT proxies: %s" % (GENERATETRAFFIC1))
+
+		elif o == "-g":
+			GENERATETRAFFIC2 = True
+			print("Generate MQTT traffic using one MQTT broker in h1: %s" % (GENERATETRAFFIC2))
 
 		elif o == "-d":
 			delayLinkHost = a
@@ -331,6 +353,10 @@ def main():
 
 	if r != R:
 		print("If you specify a real network interface (%d) or a host to connect the real network interface (%d), you shall also specify the other parameter. Exiting..." % (r, R))
+		sys.exit()
+
+	if GENERATETRAFFIC1 and GENERATETRAFFIC2:
+		print("You can only generate traffic using MQTT proxies or using one MQTT broker in h1, not both options simultaneously")
 		sys.exit()
 
 
