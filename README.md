@@ -71,7 +71,7 @@ git clone https://github.com/jorgenavarroortiz/MQTT2MULTICAST.git
 cd ~/MQTT2MULTICAST/RYU
 python3 ./bin/ryu-manager --verbose ryu/app/simple_switch_13.py 2>&1 | tee ryu.log
 ```
-- Open a terminal to execute mininet (you can change `halfrtt` and `use_real_interface`, as required for the particular experiment, in the Python script for the topology):
+- Open a terminal to execute mininet (as required for a particular experiment, you can use `-d` and `-D` to indicate the delay in links to hosts or between switches, respectively; you can also use `-r` and `-R` to indicate a real interface to be connected to a particular hosts):
 ```
 cd ~/MQTT2MULTICAST
 sudo python3 ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
@@ -114,7 +114,7 @@ git clone https://github.com/jorgenavarroortiz/MQTT2MULTICAST.git
 cd ~/MQTT2MULTICAST/RYU
 python3 ./bin/ryu-manager --verbose ryu/app/simple_switch_13_MQTT2MULTICAST.py 2>&1 | tee ryu.log
 ```
-- Open a terminal to execute mininet (you can change `halfrtt` and `use_real_interface`, as required for the particular experiment, in the Python script for the topology):
+- Open a terminal to execute mininet (as required for a particular experiment, you can use `-d` and `-D` to indicate the delay in links to hosts or between switches, respectively; you can also use `-r` and `-R` to indicate a real interface to be connected to a particular hosts):
 ```
 cd ~/MQTT2MULTICAST
 sudo python3 ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
@@ -170,7 +170,7 @@ git clone https://github.com/jorgenavarroortiz/MQTT2MULTICAST.git
 cd ~/MQTT2MULTICAST/RYU
 python3 ./bin/ryu-manager --observe-links --verbose ryu/app/simple_switch_13_MQTT2MULTICAST.py 2>&1 | tee ryu.log
 ```
-- Open a terminal to execute mininet (you can change `halfrtt` and `use_real_interface`, as required for the particular experiment, in the Python script for the topology):
+- Open a terminal to execute mininet (as required for a particular experiment, you can use `-d` and `-D` to indicate the delay in links to hosts or between switches, respectively; you can also use `-r` and `-R` to indicate a real interface to be connected to a particular hosts):
 ```
 cd ~/MQTT2MULTICAST
 sudo python3 ./mininet/topo_mqtt_lora_VM_bridged.py -v -f 2 -f 2
