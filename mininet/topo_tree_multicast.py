@@ -4,13 +4,15 @@
 
 from mininet.net import Mininet
 from mininet.cli import CLI
-from mininet.node import Controller, OVSKernelSwitch, RemoteController, OVSSwitch
+from mininet.node import Controller, Switch, OVSKernelSwitch, RemoteController, OVSSwitch
 from mininet.log import setLogLevel, info, error
 from mininet.link import Intf, TCLink
 from mininet.util import quietRun
 
 from mininet.nodelib import NAT
 from mininet.topolib import TreeNet
+
+from time import sleep, time
 
 import re
 import sys
@@ -19,7 +21,7 @@ import getopt
 import io, os
 
 PACKETCAPTURE=True
-GENERATETRAFFIC=True # For traffic generation, we assume 2 hosts per switch (fanout=2 in the last level), the first one with MQTT proxy and the second one subscribing and publishing messages
+GENERATETRAFFIC=True
 
 # Default values
 verbose = False
@@ -31,6 +33,27 @@ elementToConnectRealNetworkInterface = None
 RH = 0 # 1 if a real network interface is connected to a host
 RS = 0 # 1 if a real network interface is connected to a switch
 numberElement = 0 # Host or switch connected using a real network interface
+
+
+class Router(Switch):
+    """Defines a new router that is inside a network namespace so that the
+    individual routing entries don't collide.   """
+    ID = 0
+    def __init__(self, name, **kwargs):
+        kwargs['inNamespace'] = True
+        Switch.__init__(self, name, **kwargs)
+        Router.ID += 1    
+        self.switch_id = Router.ID
+
+    @staticmethod
+    def setup():
+        return
+
+    def start(self, controllers):
+        pass
+
+    def stop(self):
+        self.deleteIntfs()
 
 
 def checkIntf( intf ):
@@ -45,14 +68,14 @@ def checkIntf( intf ):
 
 def myNetwork():
 	# Create mininet network
-	net = Mininet(controller=RemoteController,switch=OVSKernelSwitch, listenPort=6634)
+	net = Mininet(controller=RemoteController, switch=Router, listenPort=6634)
 
 	# Create controller
 	info( '*** Add controller\n' )
 	c0 = net.addController(name='c0',controller=RemoteController,protocols='OpenFlow13',ip='127.0.0.1',port=6633)
 
 	########################
-        ### Create tree topology
+        ### Create tree topology (switches are routers in this topology, but last level in which real switches are used to connect several hosts to the same router)
 	########################
 	noSwitches = 0
 	nameOfSwitches = []
@@ -62,18 +85,19 @@ def myNetwork():
 	if verbose: print("Switches in level 0: %d" % (noSwitches + noSwitchesInThisLevel))
 	nameOfSwitchesInThisLevel = []
 	for s in range(noSwitchesInThisLevel):
-		switchThisLevel = 's' + str(noSwitches + s + 1)
+		switchThisLevel = 'R' + str(noSwitches + s + 1)
 		nameOfSwitches.append(switchThisLevel)
 		nameOfSwitchesInThisLevel.append(switchThisLevel)
 	noSwitches = noSwitches + noSwitchesInThisLevel
 	noSwitchesInPreviousLevel = noSwitchesInThisLevel
-	nameOfSwitchesInPreviousLevel = nameOfSwitchesInThisLevel
+	nameOfSwitchesInPreviousLevel = nameOfSwitchesInThisLevel.copy()
 	if verbose: print("Name of switches up to level 0: %s" % (nameOfSwitches))
 	if verbose: print("Name of switches in level 0: %s" % (nameOfSwitchesInThisLevel))
 
-	    # Switches of the tree (except the root)
+	    # Routers of the tree (except the root)
 	linksU = [] # Switch on the upper level
 	linksB = [] # Switch on the bottom level
+	levelB = [] # Bottom level (0=root, 1=first level, ...)
 	for i in range(len(fanoutPerLevel) - 1):
 		noSwitchesInThisLevel = noSwitchesInPreviousLevel * fanoutPerLevel[i]
 		if verbose: print("Switches in level %d: %d" % (i+1, noSwitchesInThisLevel))
@@ -81,9 +105,10 @@ def myNetwork():
 		nameOfSwitchesInThisLevel = []
 		for switchPreviousLevel in nameOfSwitchesInPreviousLevel:
 			for s in range(fanoutPerLevel[i]):
-				switchThisLevel = 's' + str(noSwitches + s + 1)
+				switchThisLevel = 'R' + str(noSwitches + s + 1)
 				linksU.append(switchPreviousLevel)
 				linksB.append(switchThisLevel)
+				levelB.append(i+1)
 				nameOfSwitches.append(switchThisLevel)
 				nameOfSwitchesInThisLevel.append(switchThisLevel)
 			noSwitches = noSwitches + fanoutPerLevel[i]
@@ -92,10 +117,29 @@ def myNetwork():
 		if verbose: print("Name of switches in level %d: %s" % (i+1, nameOfSwitchesInThisLevel))
 		if verbose: print("Name of switches in level %d: %s" % (i, nameOfSwitchesInPreviousLevel))
 		noSwitchesInPreviousLevel = noSwitchesInThisLevel
-		nameOfSwitchesInPreviousLevel = nameOfSwitchesInThisLevel
+		nameOfSwitchesInPreviousLevel = nameOfSwitchesInThisLevel.copy()
 
 	print("Total no. switches: %d" % (noSwitches))
 	if verbose: print("Name of switches: %s" % (nameOfSwitches))
+
+	if verbose: print("nameOfSwitchesInPreviousLevel: %s" % (nameOfSwitchesInPreviousLevel))
+
+	    # Real switches, to connect one router to several hosts
+	i = 0
+	noRealSwitches = 0
+	nameOfSwitchesInThisLevel = []
+	for switchPreviousLevel in nameOfSwitchesInPreviousLevel:
+		switchThisLevel = 's' + str(i + 1)
+		if verbose: print("New switch %s connected to router %s" % (switchThisLevel, switchPreviousLevel))
+#		print("nameOfSwitchesInPreviousLevel: %s" % (nameOfSwitchesInPreviousLevel))
+		linksU.append(switchPreviousLevel)
+		linksB.append(switchThisLevel)
+		levelB.append(len(fanoutPerLevel))
+		nameOfSwitches.append(switchThisLevel)
+		nameOfSwitchesInThisLevel.append(switchThisLevel)
+		i = i + 1
+		noRealSwitches = noRealSwitches + 1
+	nameOfSwitchesInPreviousLevel = nameOfSwitchesInThisLevel.copy()
 
 	    # Hosts
 	i = len(fanoutPerLevel) - 1
@@ -105,16 +149,18 @@ def myNetwork():
 	noHosts = 0
 	for switchPreviousLevel in nameOfSwitchesInPreviousLevel:
 		for h in range(fanoutPerLevel[i]):
-			hostThisLevel = 'h' + str(noHosts + h + 1)
+			noHost = noHosts + h +1
+			hostThisLevel = 'h' + str(noHost)
 			linksU.append(switchPreviousLevel)
 			linksB.append(hostThisLevel)
+			levelB.append(i+1)
 			nameOfHosts.append(hostThisLevel)
 		noHosts = noHosts + fanoutPerLevel[i]
 	if verbose: print("Name of hosts in level %d: %s" % (i+1, nameOfHosts))
 	print("Total no. hosts:    %d" % (noHosts))
 
 	for i in range(len(linksU)):
-		if verbose: print("Link %d: %s - %s" % (i, linksU[i], linksB[i]))
+		if verbose: print("Link %d (level %d): %s - %s" % (i, levelB[i], linksU[i], linksB[i]))
 
 
 	# Check if element (host or switch) with a real network interface exists
@@ -126,15 +172,33 @@ def myNetwork():
 	# Create hosts
 	info( '*** Add hosts\n' )
 	hosts = []
+	x = 0
+	previousSwitch = ''
 	for i in range(noHosts):
 		hostname = 'h%d' % (i+1)
-		host = net.addHost(hostname, mac='00:00:00:00:00:%d' % (i+1), ip='192.168.1.%d' % (100+i+1))
+		index = linksB.index(hostname)
+		switchThisHost=linksU[index]
+		if previousSwitch != switchThisHost:
+			if verbose: print ("previousSwitch: %s, switchThisHost: %s" % (previousSwitch, switchThisHost))
+			previousSwitch = switchThisHost
+			x = x + 1
+			y = 0
+		y = y + 1
+#		print("i %d, noSwitches %s, index %d, linksU %s, linksB %s, levelB %s" % (i, noSwitches, index, linksU, linksB, levelB))
+		if verbose: print("Create host %s (IP 192.168.%d.%d/24) on level %d with previous switch %s" % (hostname, x, y, levelB[index], switchThisHost))
+		host = net.addHost(hostname, mac='00:00:00:00:00:%d' % (i+1), ip='192.168.%d.%d/24' % (x, (y+1)))
 		hosts.append(host)
 
 	# Create switches
-	info( '*** Add switches\n' )
+	info( '*** Add routers and switches\n' )
 	switches = []
 	for i in range(noSwitches):
+		switchName = 'R%d' % (i+1)
+		switch = net.addSwitch(switchName, cls=Router)
+		switches.append(switch)
+
+	for i in range(noRealSwitches):
+		switchName = 's%d' % (i+1)
 		switch = net.addSwitch('s%d' % (i+1), cls=OVSSwitch, protocols='OpenFlow13')
 		switches.append(switch)
 
@@ -157,28 +221,58 @@ def myNetwork():
 				net.addLink( net.get(linksU[i]), net.get(linksB[i]) )
 			else:
 				net.addLink( net.get(linksU[i]), net.get(linksB[i]), cls=TCLink, delay=delayLinkHost )
-		else:
+		elif element[0] == 'R':
 			# Link between switches
 			if delayLinkSwitches == '0ms':
 				net.addLink( net.get(linksU[i]), net.get(linksB[i]) )
 			else:
 				net.addLink( net.get(linksU[i]), net.get(linksB[i]), cls=TCLink, delay=delayLinkSwitches )
+		else:
+			# Link between real switches (no delay)
+			net.addLink( net.get(linksU[i]), net.get(linksB[i]) )
 
-#	net.addLink( net.get('s1'), net.get('s2') )
+#	net.addLink( net.get('R1'), net.get('R2') )
 	
 	# Create network
 	info( '\n*** Starting network\n')
 	net.build()
 	net.start()
 
+	# Configure routers
+	for i in range(noSwitches):
+		switchName = 'R%d' % (i+1)
+		net.get(switchName).cmd("sysctl -w net.ipv4.ip_forward=1")
+		net.get(switchName).waitOutput()
+
 	# Start controller
 	info( '*** Starting controllers\n')
 	for controller in net.controllers:
 		controller.start()
-	net.get('s1').start([c0])
+#	net.get('R1').start([c0])
 
 #	net.get('h1').cmd("XXX")    # Example on how to execute a command on a particular host
 #	net.get('h1').waitOutput()
+
+	# Default route
+	hosts = []
+	x = 0
+	previousSwitch = ''
+	for i in range(noHosts):
+		hostname = 'h%d' % (i+1)
+		index = linksB.index(hostname)
+		switchThisHost=linksU[index]
+		if previousSwitch != switchThisHost:
+			if verbose: print ("previousSwitch: %s, switchThisHost: %s" % (previousSwitch, switchThisHost))
+			previousSwitch = switchThisHost
+			x = x + 1
+			y = 0
+		y = y + 1
+#		print("i %d, noSwitches %s, index %d, linksU %s, linksB %s, levelB %s" % (i, noSwitches, index, linksU, linksB, levelB))
+		if verbose: print("Create default route for host %s through IP 192.168.%d.1 on level %d with previous switch %s" % (hostname, x, levelB[index], switchThisHost))
+		host = net.get(hostname)
+		commandStr='route add default gw 192.168.' + str(x) + '.1'
+		if verbose: print("command on host %s: %s" % (hostname, commandStr))
+		host.cmd(commandStr)
 
 	# Disable IPv6
 	print ("*** Disable IPv6 in hosts")
@@ -193,26 +287,55 @@ def myNetwork():
 		sw.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
 		sw.cmd("sysctl -w net.ipv6.conf.lo.disable_ipv6=1")
 
+	# Start zebra (quagga)
+	for i in range(noSwitches):
+		switchName = 'R%d' % (i+1)
+		router = net.get(switchName)
+		print("Start zebra on %s" % router.name)
+		router.cmd("/usr/local/quagga/sbin/zebra -f /usr/local/quagga/etc/zebra-%s.conf -d -i /usr/local/quagga/etc/zebra-%s.pid > /tmp/%s-zebra-stdout 2>&1" %(router.name, router.name, router.name))
+		router.waitOutput()
+
+	sleepTime=3
+	print("Waiting %d seconds for zebra changes to take effect..." % sleepTime)
+	sleep(sleepTime)
+
+	# Start RIPD on routers
+	for i in range(noSwitches):
+		switchName = 'R%d' % (i+1)
+		router = net.get(switchName)
+		router.cmd("/usr/local/quagga/sbin/ripd -f /usr/local/quagga/etc/ripd-%s.conf -d -i /usr/local/quagga/etc/ripd-%s.pid > /tmp/%s-ripd-stdout 2>&1" %(router.name, router.name, router.name), shell=True) 
+		router.waitOutput()
+		print("Start ripd on %s" % router.name)
+
+	sleepTime=3
+	print("Waiting %d seconds for ripd changes to take effect..." % sleepTime)
+	sleep(sleepTime)
+
 	# Packet capture
 	if PACKETCAPTURE:
-		print ("*** Capture packet traces in all hosts and switches")
+		print ("*** Capture packet traces in all hosts and routers")
 		for h in net.hosts:
 			h.cmd("sudo tshark -i any -w /tmp/%s.pcap 2>&1 &" % (h.name))
-		for sw in net.switches:
-			sw.cmd("sudo tshark -i any -w /tmp/%s.pcap 2>&1 &" % (sw.name))
+		for i in range(noSwitches):
+			switchName = 'R%d' % (i+1)
+			router = net.get(switchName)
+			router.cmd("sudo tshark -i any -w /tmp/%s.pcap 2>&1 &" % (router.name))
 
-	# Start PIMD traffic (odd hosts, i.e. h1, h3, h5, ... will be the MQTT proxies; even hosts, i.e. h2, h4, h6, ... will be MQTT subscribers; all the even hosts will publish MQTT messages periodically)
+	# Start PIMD on routers
+	for i in range(noSwitches):
+		switchName = 'R%d' % (i+1)
+		router = net.get(switchName)
+		router.cmd("/usr/local/quagga/sbin/pimd -f /usr/local/quagga/etc/pimd-%s.conf -d -i /usr/local/quagga/etc/pimd-%s.pid" %(router.name, router.name), shell=True)  
+		router.waitOutput()
+		print("Start pimd on %s" % router.name)
+
+	# Start PIMD traffic (h1 will be the ssmpingd server, remaining hosts will ssmping the server)
 	if GENERATETRAFFIC:
 		for h in net.hosts:
-			hostNo = int(h.name[1:])
-			if ((hostNo % 2) == 1):
-				# Odd host -> MQTT proxy
-				h.cmd("cd ~/MQTT2MULTICAST/SCAPY; ./mqtt_proxy_m2m.sh &")
+			if h.name == "h1":
+				h.cmd("~/MQTT2MULTICAST/scripts_pim/start_ssmping_server.sh &")
 			else:
-				# Even host
-				h.cmd("~/MQTT2MULTICAST/scripts_mqtt/start_mqtt_subscriber.sh &")
-				lastByteProxy = str(100 + hostNo - 1) # Previous hosts, i.e. h2 will publish to MQTT proxy at h1
-				h.cmd("~/MQTT2MULTICAST/scripts_mqtt/start_mqtt_publisher.sh 192.168.1.%s &" % (lastByteProxy))
+				h.cmd("~/MQTT2MULTICAST/scripts_pim/start_ssmping_client.sh &")
 
 	# "Real" network interface connected to host
 	if RH == 1:
@@ -241,14 +364,16 @@ def usage():
 	print("         %s -v -f 2 -f 3 -f 2 -d 10ms" % (sys.argv[0]))
 
 def main():
-	global delayLinkHost, delayLinkSwitches, fanoutPerLevel, realNetworkInterface, elementToConnectRealNetworkInterface, RH, RS, numberElement
+	global delayLinkHost, delayLinkSwitches, fanoutPerLevel, realNetworkInterface, elementToConnectRealNetworkInterface, RH, RS, numberElement, verbose
+
+	os.system("rm -f /tmp/R*.log /tmp/R*.pid logs/*")
+	os.system("killall -9 zebra ripd pimd tshark > /dev/null 2>&1")
 
 	try:
 		os.remove('/tmp/delay')
 		os.remove('/tmp/DELAY')
-		os.system("rm -f /tmp/s*.pcap /tmp/h*.pcap")
 	except:
-		print("Error while deleting a file")
+		print("Error while deleting file /tmp/DELAY")
 
 	try:
 		opts, args = getopt.getopt(sys.argv[1:], "hf:d:D:r:R:v", ["help", "output="])
@@ -300,7 +425,7 @@ def main():
 			if elementToConnectRealNetworkInterface[0] == 'h':
 				RH = 1
 				print("This host (%s) will connect using a real network interface and will act as a router (ip_forward = 1)" % (elementToConnectRealNetworkInterface))
-			elif elementToConnectRealNetworkInterface[0] == 's':
+			elif elementToConnectRealNetworkInterface[0] == 'R':
 				RS = 1
 				print("This switch (%s) will connect using a real network interface" % (elementToConnectRealNetworkInterface))
 			else:

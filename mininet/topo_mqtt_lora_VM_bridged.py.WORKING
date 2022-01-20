@@ -18,9 +18,6 @@ import getopt
 
 import io, os
 
-PACKETCAPTURE=True
-GENERATETRAFFIC=True # For traffic generation, we assume 2 hosts per switch (fanout=2 in the last level), the first one with MQTT proxy and the second one subscribing and publishing messages
-
 # Default values
 verbose = False
 delayLinkHost = '0ms'
@@ -193,27 +190,6 @@ def myNetwork():
 		sw.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
 		sw.cmd("sysctl -w net.ipv6.conf.lo.disable_ipv6=1")
 
-	# Packet capture
-	if PACKETCAPTURE:
-		print ("*** Capture packet traces in all hosts and switches")
-		for h in net.hosts:
-			h.cmd("sudo tshark -i any -w /tmp/%s.pcap 2>&1 &" % (h.name))
-		for sw in net.switches:
-			sw.cmd("sudo tshark -i any -w /tmp/%s.pcap 2>&1 &" % (sw.name))
-
-	# Start PIMD traffic (odd hosts, i.e. h1, h3, h5, ... will be the MQTT proxies; even hosts, i.e. h2, h4, h6, ... will be MQTT subscribers; all the even hosts will publish MQTT messages periodically)
-	if GENERATETRAFFIC:
-		for h in net.hosts:
-			hostNo = int(h.name[1:])
-			if ((hostNo % 2) == 1):
-				# Odd host -> MQTT proxy
-				h.cmd("cd ~/MQTT2MULTICAST/SCAPY; ./mqtt_proxy_m2m.sh &")
-			else:
-				# Even host
-				h.cmd("~/MQTT2MULTICAST/scripts_mqtt/start_mqtt_subscriber.sh &")
-				lastByteProxy = str(100 + hostNo - 1) # Previous hosts, i.e. h2 will publish to MQTT proxy at h1
-				h.cmd("~/MQTT2MULTICAST/scripts_mqtt/start_mqtt_publisher.sh 192.168.1.%s &" % (lastByteProxy))
-
 	# "Real" network interface connected to host
 	if RH == 1:
 		# Adjust the IP addresses of this host. The real network interface will be in the 192.168.2.0/24 network, and the hX-eth1 will be in the 192.168.1.0/24 network (like the rest of the hosts).
@@ -246,9 +222,8 @@ def main():
 	try:
 		os.remove('/tmp/delay')
 		os.remove('/tmp/DELAY')
-		os.system("rm -f /tmp/s*.pcap /tmp/h*.pcap")
 	except:
-		print("Error while deleting a file")
+		print("Error while deleting file /tmp/DELAY")
 
 	try:
 		opts, args = getopt.getopt(sys.argv[1:], "hf:d:D:r:R:v", ["help", "output="])
