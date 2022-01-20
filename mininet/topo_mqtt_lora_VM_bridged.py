@@ -18,8 +18,8 @@ import getopt
 
 import io, os
 
-PACKETCAPTURE=True
-GENERATETRAFFIC=True # For traffic generation, we assume 2 hosts per switch (fanout=2 in the last level), the first one with MQTT proxy and the second one subscribing and publishing messages
+PACKETCAPTURE=False
+GENERATETRAFFIC=False # For traffic generation, we assume 2 hosts per switch (fanout=2 in the last level), the first one with MQTT proxy and the second one subscribing and publishing messages
 
 # Default values
 verbose = False
@@ -236,7 +236,9 @@ def myNetwork():
 
 def usage():
 	print("This script will create a tree topology in Mininet. All levels are composed of switches except the last level, which is composed of hosts.")
-	print("Usage:   %s [-h] [-v] -f <fanout first level> -f <fanout second level> ... [-r <real network interface> -R <host to connect the real network interface>] [-d <delay in links to hosts>] [-D <delay in links between switches>]" % (sys.argv[0]))
+	print("Usage:   %s [-h] [-v] -f <fanout first level> -f <fanout second level> ... [-r <real network interface> -R <host to connect the real network interface>] [-d <delay in links to hosts>] [-D <delay in links between switches>] [-P] [-G]" % (sys.argv[0]))
+	print("         -P ...... capture packets for each host and switch in /tmp directory (s*.pcap, h*.pcap)")
+	print("         -G ...... generate traffic; we assume that each leaf switch has two hosts; the first one executes an MQTT proxy, the second one subscribes to topic \"topic1\" and generates traffic (publishes messages) in that topic")
 	print("Example to create a tree with root, 2 more levels of switches and one last level of hosts (L0 = root, L1 = 2 switches, L2 = 2 x 3 switches, L3 = 2 x 3 x 2 hosts):")
 	print("         %s -v -f 2 -f 3 -f 2 -d 10ms" % (sys.argv[0]))
 
@@ -251,7 +253,7 @@ def main():
 		print("Error while deleting a file")
 
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hf:d:D:r:R:v", ["help", "output="])
+		opts, args = getopt.getopt(sys.argv[1:], "hPGf:d:D:r:R:v", ["help", "output="])
 	except getopt.GetoptError as err:
 		# print help information and exit:
 		print(err)
@@ -262,9 +264,19 @@ def main():
 	for o, a in opts:
 		if o == "-v":
 			verbose = True
+
 		elif o in ("-h", "--help"):
 			usage()
 			sys.exit()
+
+		elif o == "-P":
+			PACKETCAPTURE = True
+			print("Packet capture: %s" % (PACKETCAPTURE))
+
+		elif o == "-G":
+			GENERATETRAFFIC = True
+			print("Generate MQTT traffic: %s" % (GENERATETRAFFIC))
+
 		elif o == "-d":
 			delayLinkHost = a
 			print("Delay in links to hosts: %s" % (delayLinkHost))
