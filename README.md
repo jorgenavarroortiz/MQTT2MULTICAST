@@ -2,6 +2,11 @@
 
 © Jorge Navarro-Ortiz (jorgenavarro@ugr.es), University of Granada, 2021
 
+If you want to use this repository (total or partially), please reference our paper:
+
+[1] "A LoRaWAN Network Architecture with MQTT2MULTICAST", Jorge Navarro-Ortiz, Natalia Chinchilla-Romero, Felix Delgado-Ferro, Juan Jose Ramos-Munoz,
+Electronics, 2022
+
 This repository is composed of three parts:
 
 - An MQTT proxy created with SCAPY (tested with Scapy 2.4.4).
