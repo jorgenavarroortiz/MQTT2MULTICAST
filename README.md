@@ -5,7 +5,7 @@
 If you want to use this repository (total or partially), please reference our paper:
 
 [1] "A LoRaWAN Network Architecture with MQTT2MULTICAST", Jorge Navarro-Ortiz, Natalia Chinchilla-Romero, Felix Delgado-Ferro, Juan Jose Ramos-Munoz,
-Electronics, 2022
+Electronics, Electronics, 11 (6), 2022, DOI: 10.3390/electronics11060872
 
 This repository is composed of three parts:
 
